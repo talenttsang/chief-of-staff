@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Man AI</title>
+  {% include "_theme.html" %}
+  <style>
+    header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+    .brand { font-size: 17px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+    .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+    .brand .dot.on { background: var(--good); }
+    .lastrun { color: var(--muted); font-size: 13px; flex: 1; min-width: 180px; }
+    .toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 13px; }
+    .toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .toggle .track { width: 34px; height: 20px; border-radius: 10px; background: var(--line); position: relative; transition: .15s; flex: none; }
+    .toggle .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+      background: var(--panel); box-shadow: var(--shadow); transition: .15s; }
+    .toggle input:checked + .track { background: var(--good); }
+    .toggle input:checked + .track::after { left: 16px; }
+    .toggle input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .who { color: var(--muted); font-size: 13px; }
+    .iconbtn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; width: 34px; height: 34px; cursor: pointer; font-size: 16px; color: var(--muted); }
+    .iconbtn:hover { background: var(--panel-2); color: var(--text); }
+    main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
+    .banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: var(--radius);
+      margin-bottom: 12px; background: var(--warn-weak); color: var(--text); border: 1px solid var(--line); }
+    .banner.bad { background: var(--bad-weak); }
+    .banner span { flex: 1; min-width: 200px; }
+    .banner b { font-weight: 500; }
+    .progress { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+    .progress .line1 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .progress .phase { font-weight: 500; }
+    .progress .eta, .progress .now, .progress .sofar { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .progress .now { margin-bottom: 2px; }
+    .bar { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; margin: 10px 0 8px; }
+    .bar > div { height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s ease; }
+    .bar.indeterminate > div { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+    .spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex: none; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner, .bar.indeterminate > div, .pulse { animation: none !important; } }
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 14px; overflow-x: auto; }
+    .tab { padding: 10px 14px; border: 0; background: none; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+    .count { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--panel-2); color: var(--muted); font-size: 12px; text-align: center; margin-left: 4px; }
+    .count.hot { background: var(--accent); color: var(--accent-text); }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+    .toolbar input[type=search], .toolbar select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .toolbar input[type=search] { flex: 1; min-width: 160px; max-width: 340px; }
+    .toolbar .spacer { flex: 1; }
+    .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; }
+    .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+    .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+    @media (max-width: 900px) { .board { grid-template-columns: 1fr; } }
+    .col { background: var(--panel-2); border-radius: var(--radius); padding: 10px; min-height: 120px; }
+    .col h2 { font-size: 13px; font-weight: 500; color: var(--muted); margin: 2px 4px 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+      box-shadow: var(--shadow); cursor: pointer; position: relative; }
+    .card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
+    .card .title { font-weight: 500; margin-right: 26px; overflow-wrap: anywhere; }
+    .card .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--muted); align-items: center; }
+    .card .body { color: var(--muted); font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
+    .chip { padding: 1px 8px; border-radius: 10px; background: var(--panel-2); }
+    .chip.me { background: var(--accent-weak); color: var(--accent); }
+    .chip.overdue, .chip.blocked { background: var(--bad-weak); color: var(--bad); }
+    .chip.today, .chip.paused { background: var(--warn-weak); color: var(--warn); }
+    .chip.active, .chip.connected { background: var(--good-weak); color: var(--good); }
+    .pri { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .pri.high { background: var(--bad); } .pri.medium { background: var(--warn); } .pri.low { background: var(--faint); }
+    .card .advance { position: absolute; top: 8px; right: 8px; border: 0; background: none; cursor: pointer; color: var(--faint); font-size: 16px; padding: 2px 6px; border-radius: 6px; }
+    .card .advance:hover { background: var(--panel-2); color: var(--accent); }
+    .card .src { color: var(--faint); font-size: 12px; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+    .empty { color: var(--faint); text-align: center; padding: 18px 8px; font-size: 13px; }
+    section h3 { font-size: 15px; font-weight: 500; margin: 18px 0 10px; }
+    .item { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+    .item .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+    .item .q { font-weight: 500; margin: 2px 0 4px; overflow-wrap: anywhere; }
+    .item textarea { width: 100%; min-height: 70px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); resize: vertical; margin-top: 8px; }
+    .status { font-size: 12px; padding: 1px 8px; border-radius: 10px; font-weight: 500; }
+    .status.done { background: var(--good-weak); color: var(--good); }
+    .status.suggested { background: var(--accent-weak); color: var(--accent); }
+    .status.failed { background: var(--bad-weak); color: var(--bad); }
+    .status.dismissed { background: var(--panel-2); color: var(--faint); }
+    .quote { border-left: 3px solid var(--line); padding: 2px 10px; color: var(--muted); margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .reply { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; }
+    .why { font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
+    .item .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+    table.runs { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; font-size: 13px; }
+    table.runs th, table.runs td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.runs th { color: var(--muted); font-weight: 500; background: var(--panel-2); white-space: nowrap; }
+    table.runs td.err { color: var(--bad); }
+    .tablewrap { overflow-x: auto; }
+    /* Man AI chat: a window at the bottom right, over every tab, that minimizes to a button */
+    main { padding-bottom: 96px; }  /* room for the minimized button */
+    .chatwin { position: fixed; right: 20px; bottom: 20px; z-index: 15; width: min(420px, calc(100vw - 40px));
+      height: min(680px, calc(100vh - 40px)); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px;
+      padding: 8px 12px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(16, 24, 40, .22); }
+    .chathead { display: flex; align-items: center; gap: 2px; }
+    .chathead h2 { font-size: 15px; font-weight: 500; margin: 0 auto 0 4px; }
+    .hbtn { border: 0; background: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: 8px; cursor: pointer;
+      color: var(--muted); font-size: 14px; }
+    .hbtn:hover { background: var(--panel-2); color: var(--text); }
+    .hbtn[aria-pressed="true"] { background: var(--accent-weak); color: var(--accent); }
+    .hbtn.min { font-size: 18px; line-height: 1; }
+    .launcher { position: fixed; right: 20px; bottom: 20px; z-index: 15; display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 18px; border-radius: 999px; border: 0; cursor: pointer; font-weight: 500;
+      background: var(--accent); color: var(--accent-text); box-shadow: 0 6px 20px rgba(16, 24, 40, .25); }
+    .launcher:hover { filter: brightness(1.06); }
+    .launcher:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .launcher .badge { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--accent); }
+    .partners { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .partner { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+      display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+    .partner.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 500; }
+    .partner .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+    .partner .pdot.off { background: var(--faint); }
+    .partner:disabled { opacity: .55; cursor: default; }
+    .thread { overflow-y: auto; background: var(--bg); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { max-width: 92%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+    .msg.user { align-self: flex-end; background: var(--accent-weak); border-bottom-right-radius: 4px; }
+    .msg.assistant { align-self: flex-start; background: var(--panel-2); border-bottom-left-radius: 4px; }
+    .msg.live { opacity: .8; font-style: italic; }
+    .msg .tools { font-size: 12px; color: var(--faint); margin-top: 6px; font-style: normal; }
+    .msg .when { font-size: 11px; color: var(--faint); margin-top: 4px; }
+    .report { white-space: pre-wrap; background: var(--panel-2); border-radius: var(--radius); padding: 10px 12px;
+      font-size: 13px; line-height: 1.5; max-height: 260px; overflow: auto; margin-top: 8px; }
+    .report b { display: block; margin-bottom: 4px; }
+    .chip.working { background: var(--accent-weak); color: var(--accent); }
+    .msg .spk { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px;
+      padding: 2px 6px; margin-left: 6px; border-radius: 6px; vertical-align: middle; }
+    .msg .spk:hover, .msg .spk.on { background: var(--accent-weak); color: var(--accent); }
+    .composer { display: flex; gap: 8px; align-items: flex-end; }
+    .composer textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 180px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); resize: none; }
+    .suggestions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: auto 0; }
+    .suggestions button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); }
+    .suggestions button:hover { color: var(--text); border-color: var(--accent); }
+    .voicebar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--radius); background: var(--accent-weak); border: 1px solid var(--line); }
+    .voicebar { margin-bottom: 8px; }
+    .voicebar .vstate { font-weight: 500; flex: 1; min-width: 120px; }
+    .meter { width: 90px; height: 8px; border-radius: 4px; background: var(--panel); overflow: hidden; }
+    .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
+    .pulse { width: 12px; height: 12px; border-radius: 50%; background: var(--bad); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+    .btn.mic { font-size: 15px; }
+    /* Dialogs */
+    dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; background: var(--panel); color: var(--text); width: min(600px, calc(100vw - 32px)); box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+    dialog::backdrop { background: rgba(0,0,0,.35); }
+    dialog form { padding: 20px; display: grid; gap: 12px; }
+    dialog h2 { margin: 0; font-size: 18px; font-weight: 500; }
+    dialog h4 { margin: 8px 0 0; font-size: 14px; font-weight: 500; }
+    dialog label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+    dialog label.check { display: inline-flex; }
+    dialog input, dialog select, dialog textarea { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+    dialog textarea { min-height: 80px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .dialog-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
+    .dialog-foot .left { margin-right: auto; }
+    .tiers { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; font-size: 14px; }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+    .seg button { border: 0; background: var(--panel); padding: 5px 12px; cursor: pointer; color: var(--muted); }
+    .seg button.on { background: var(--accent); color: var(--accent-text); }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; z-index: 20; max-width: calc(100vw - 32px); }
+    .toast.show { opacity: 1; }
+    @media (max-width: 600px) {
+      header, main { padding-left: 16px; padding-right: 16px; }
+      .row { grid-template-columns: 1fr; }
+      .who { display: none; }
+      /* On a phone the open chat fills the screen; minimize gets back to the page. */
+      .chatwin { inset: 0; width: auto; height: auto; border: 0; border-radius: 0; box-shadow: none; padding: 8px 12px 12px; }
+      .launcher { right: 16px; bottom: 16px; }
+    }
+  </style>
+</head>
+<body data-version="{{ version }}">
+<header>
+  <div class="brand"><span class="dot" id="dot"></span>Man AI</div>
+  <div class="lastrun" id="lastrun">Loading…</div>
+  <label class="toggle" title="When off, everything the assistant would do waits for your approval">
+    <input type="checkbox" id="autoAct"><span class="track"></span><span>Act automatically</span>
+  </label>
+  <button class="btn primary" id="runNow">Run now</button>
+  <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">⚙</button>
+  <span class="who">{{ owner }}</span>
+  <button class="btn" id="logout">Sign out</button>
+</header>
+
+<main>
+  <div id="progress" class="progress" hidden aria-live="polite"></div>
+  <div id="banners"></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="board">Board <span class="count" id="boardCount">0</span></button>
+    <button class="tab" data-tab="projects">Projects <span class="count" id="projectCount">0</span></button>
+    <button class="tab" data-tab="questions">Questions <span class="count" id="questionCount">0</span></button>
+    <button class="tab" data-tab="access">Access <span class="count" id="accessCount">0</span></button>
+    <button class="tab" data-tab="activity">Activity <span class="count" id="waitingCount">0</span></button>
+  </nav>
+
+  <section id="view-board">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Search tasks" aria-label="Search tasks">
+      <select id="spaceFilter" aria-label="Conversation"><option value="">All conversations</option></select>
+      <select id="ownerFilter" aria-label="Owner">
+        <option value="">Everyone</option>
+        <option value="me">Mine</option>
+        <option value="others">Others'</option>
+      </select>
+      <label class="check"><input type="checkbox" id="showDone"> Show done</label>
+      <span class="spacer"></span>
+      <button class="btn primary" id="newTask">+ New task</button>
+    </div>
+    <div class="board">
+      <div class="col" data-status="todo"><h2>To do <span class="count"></span></h2><div class="cards"></div></div>
+      <div class="col" data-status="in_progress"><h2>In progress <span class="count"></span></h2><div class="cards"></div></div>
+      <div class="col" data-status="done"><h2>Done <span class="count"></span></h2><div class="cards"></div></div>
+    </div>
+  </section>
+
+  <section id="view-projects" hidden>
+    <p class="hint">Every project the assistant knows about. It adds them from your chats and your answers; you can add and correct them too.</p>
+    <div class="toolbar">
+      <select id="companyFilter" aria-label="Company">
+        <option value="">Both companies</option>
+        <option value="superhairpieces">Superhairpieces</option>
+        <option value="gencbeauty">Gen'C Beauty</option>
+      </select>
+      <select id="projectStatusFilter" aria-label="Status">
+        <option value="">Any status</option>
+        <option value="active">Active</option><option value="blocked">Blocked</option>
+        <option value="paused">Paused</option><option value="done">Done</option><option value="unknown">Unknown</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn primary" id="newProject">+ New project</button>
+    </div>
+    <div class="grid" id="projects"></div>
+  </section>
+
+  <section id="view-questions" hidden>
+    <p class="hint">What Man AI needs to know to run things on its own. Answer here, or in the chat at the bottom right, typed or out loud with 🎙 Talk.</p>
+    <div id="openQuestions"></div>
+    <h3>Answered</h3>
+    <div id="answeredQuestions"></div>
+  </section>
+
+  <section id="view-access" hidden>
+    <p class="hint">Systems Man AI can use, and the ones it still needs. Ask it in the chat how to connect any of them; it will walk you through it.</p>
+    <div class="banner" id="setupBanner" style="white-space: pre-line" hidden></div>
+    <p class="actions"><a class="btn primary" href="/connect/setup" id="connectAll">Connect everything</a>
+      <button class="btn" id="checkSystems">Check connections</button>
+      <span class="hint">Connect everything asks Google once for your OK as the project owner, gives the app access to
+        each stored key it needs, and tests every system. Keys stay on the server; the AI never sees them.</span></p>
+    <div id="systems"></div>
+  </section>
+
+  <section id="view-activity" hidden>
+    <h3>Waiting for you</h3>
+    <div id="waiting"></div>
+    <h3>Recent actions</h3>
+    <div id="recent"></div>
+    <h3>Runs</h3>
+    <div class="tablewrap"><table class="runs"><thead><tr>
+      <th>When</th><th>Trigger</th><th>Conversations</th><th>Messages</th><th>Tasks new / updated</th><th>Learned</th><th>Actions done / waiting</th><th>Problems</th>
+    </tr></thead><tbody id="runs"></tbody></table></div>
+  </section>
+</main>
+
+<aside class="chatwin" id="chat" aria-label="Man AI chat">
+  <div class="chathead">
+    <h2>Man AI</h2>
+    <button class="hbtn" id="readAloud" aria-pressed="false" title="Read new replies aloud">🔊 Read aloud</button>
+    <button class="hbtn" id="clearTalk" title="Start a new conversation">Clear</button>
+    <button class="hbtn min" id="minimizeChat" title="Minimize" aria-label="Minimize chat">–</button>
+  </div>
+  <div class="partners" id="partners" role="group" aria-label="Who you're talking to"></div>
+  <div class="thread" id="thread" aria-live="polite"></div>
+  <div>
+    <div class="voicebar" id="voicebar" hidden>
+      <span class="pulse" aria-hidden="true"></span>
+      <span class="vstate" id="vstate">Connecting…</span>
+      <span class="meter" title="Your microphone level"><div id="vmeter"></div></span>
+      <button class="btn" id="vmute">Mute</button>
+      <button class="btn danger" id="vend">End call</button>
+    </div>
+    <div class="composer" id="composer">
+      <textarea id="message" placeholder="Message Man AI…" aria-label="Message" title="Enter to send, Shift+Enter for a new line"></textarea>
+      <button class="btn mic" id="startVoice" title="Talk live">🎙 Talk</button>
+      <button class="btn primary" id="send">Send</button>
+    </div>
+  </div>
+</aside>
+<button class="launcher" id="chatLauncher" aria-controls="chat" aria-expanded="true" hidden>💬 Man AI</button>
+
+<dialog id="taskDialog">
+  <form method="dialog" id="taskForm">
+    <h2 id="taskDialogTitle">Task</h2>
+    <label>Title <input name="title" required maxlength="200"></label>
+    <label>Details <textarea name="detail" maxlength="2000"></textarea></label>
+    <div class="row">
+      <label>Owner <input name="owner" maxlength="100" placeholder="Name"></label>
+      <label>Due <input name="due" type="date"></label>
+    </div>
+    <div class="row">
+      <label>Status <select name="status"><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option></select></label>
+      <label>Priority <select name="priority"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+    </div>
+    <label class="check"><input type="checkbox" name="owner_is_me"> This is mine</label>
+    <div id="taskSource" class="why"></div>
+    <div id="taskResult" class="report" hidden></div>
+    <div class="dialog-foot">
+      <button type="button" class="btn danger left" id="deleteTask">Delete</button>
+      <button type="button" class="btn" id="cancelTask">Cancel</button>
+      <button type="button" class="btn" id="workTask" title="Man AI works on it now with its tools, and again every hour until it's done">🤖 Give to Man AI</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="projectDialog">
+  <form method="dialog" id="projectForm">
+    <h2 id="projectDialogTitle">Project</h2>
+    <label>Name <input name="name" required maxlength="200"></label>
+    <div class="row">
+      <label>Company <select name="company"><option value="">Not set</option><option value="superhairpieces">Superhairpieces</option><option value="gencbeauty">Gen'C Beauty</option><option value="both">Both</option></select></label>
+      <label>Status <select name="status"><option value="active">Active</option><option value="blocked">Blocked</option><option value="paused">Paused</option><option value="done">Done</option><option value="unknown">Unknown</option></select></label>
+    </div>
+    <div class="row">
+      <label>Owner <input name="owner" maxlength="100"></label>
+      <label>Deadline <input name="deadline" type="date"></label>
+    </div>
+    <label>Goal <textarea name="goal" maxlength="2000"></textarea></label>
+    <label>Where it stands <textarea name="summary" maxlength="2000"></textarea></label>
+    <label>Next steps <textarea name="next_steps" maxlength="2000"></textarea></label>
+    <div id="projectSource" class="why"></div>
+    <div class="dialog-foot">
+      <button type="button" class="btn danger left" id="deleteProject">Delete</button>
+      <button type="button" class="btn" id="cancelProject">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="sendDialog">
+  <form method="dialog" id="sendForm">
+    <h2>Send this reply?</h2>
+    <div class="why" id="sendContext"></div>
+    <label>Reply, sent as you <textarea name="reply_text" maxlength="4000"></textarea></label>
+    <div class="dialog-foot">
+      <button type="button" class="btn" id="cancelSend">Cancel</button>
+      <button type="submit" class="btn primary">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="connectDialog">
+  <form method="dialog" id="connectForm">
+    <h2 id="connectTitle">Connect</h2>
+    <p class="why" id="connectHelp"></p>
+    <div id="connectFields"></div>
+    <p class="hint">Saved straight into Secret Manager. It isn't shown again, and the AI never sees it.</p>
+    <div class="dialog-foot">
+      <button type="button" class="btn" id="cancelConnect">Cancel</button>
+      <button type="submit" class="btn primary" id="saveConnect">Connect</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settingsDialog">
+  <form method="dialog" id="settingsForm">
+    <h2>Settings</h2>
+    <h4>What the assistant does on its own</h4>
+    <p class="why" style="margin:0">Auto: it acts and logs it. Ask: it proposes in Activity and waits for you. "Act automatically" in the header pauses everything.</p>
+    <div class="tiers" id="tiers"></div>
+    <h4>AI partners</h4>
+    <label class="check"><input type="checkbox" id="partnersEnabled"> Let Claude and ChatGPT work with company information (it leaves Google Cloud)</label>
+    <label>ChatGPT model <input id="openaiModel" placeholder="default (gpt-5)" maxlength="60"></label>
+    <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="btn" id="testPartners">Test partners</button>
+      <span class="why" id="partnerResults"></span>
+    </div>
+    <h4>Reading</h4>
+    <label class="check"><input type="checkbox" id="readBots"> Also read posts from apps and bots (e.g. notification spaces)</label>
+    <div class="dialog-foot">
+      <button type="button" class="btn primary" id="closeSettings">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/static/app.js"></script>
+<script src="/static/voice.js"></script>
+<script src="/static/speaker.js"></script>
+</body>
+</html>
