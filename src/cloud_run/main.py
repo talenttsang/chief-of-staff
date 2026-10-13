@@ -755,9 +755,7 @@ def do_run(trigger):
     started = utcnow_iso()
     progress = assistant.Progress(store, trigger)
     try:
-        google = app.config["MAKE_GOOGLE"]()
-        if not google:
-            raise assistant.ReconnectNeeded("Google isn't connected yet.")
+        google = app.config["MAKE_GOOGLE"]()  # None until Connect Google: the Google tools wait, nothing else does
         summary = assistant.empty_summary()
         summary["trigger"] = trigger
         progress.phase("Working on the assistant's own tasks")
@@ -776,12 +774,6 @@ def do_run(trigger):
         store.set_status({"last_run": summary, "connection_error": ""})
         progress.finish()
         return summary, 200
-    except assistant.ReconnectNeeded as exc:
-        failed = {"started_at": started, "finished_at": utcnow_iso(), "trigger": trigger, "error": str(exc)[:500]}
-        store.add_run(failed)
-        store.set_status({"last_run": failed, "connection_error": str(exc)[:500]})
-        progress.finish(str(exc))
-        return failed, 503
     except Exception as exc:  # noqa: BLE001 - recorded, then surfaced to the caller
         import traceback
 

@@ -6,6 +6,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 os.environ["STORE_BACKEND"] = "memory"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "cloud_run"))
@@ -104,13 +105,15 @@ class WebTests(unittest.TestCase):
         progress = self.call("GET", "/api/progress").get_json()
         self.assertEqual((progress["running"], progress["phase"], progress["trigger"]), (False, "Done", "schedule"))
 
-    def test_failed_run_marks_progress_failed(self):
+    def test_run_without_google_still_checks_systems(self):
         self.sign_in()
-        self.main.app.config["MAKE_GOOGLE"] = lambda: None  # not connected
-        self.assertEqual(self.call("POST", "/api/run").status_code, 503)
+        self.main.app.config["MAKE_GOOGLE"] = lambda: None  # Connect Google not pressed yet
+        with mock.patch.object(self.main.integrations, "check_all", return_value={"github": {"ok": True}}) as check:
+            resp = self.call("POST", "/api/run")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIsNone(check.call_args.kwargs["google"])
         progress = self.call("GET", "/api/progress").get_json()
-        self.assertEqual((progress["running"], progress["phase"]), (False, "Failed"))
-        self.assertIn("isn't connected", progress["error"])
+        self.assertEqual((progress["running"], progress["phase"]), (False, "Done"))
 
     def test_settings_only_known_keys(self):
         self.sign_in()

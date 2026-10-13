@@ -11,10 +11,6 @@ from datetime import datetime, timezone
 from store import utcnow_iso
 
 
-class ReconnectNeeded(RuntimeError):
-    """Talent Solutions AI's Google token was revoked or expired; Connect Google again."""
-
-
 def error_text(exc, limit=300):
     """The message plus where it happened, e.g. "... (at credentials.py:101, from google_apis.py:61)".
 
