@@ -29,9 +29,16 @@ PAGES = {
       <button onclick="alert('Hello there')">Alert me</button>
       <div style="height:3000px"></div><p>Bottom of the page</p>
     </body></html>""",
-    "/profile": """<html><head><title>About you</title></head><body>
+    "/profile": """<html><head><meta charset="utf-8"><title>About you</title></head><body>
       <div class="field"><label>Date of birth *</label><input class="input" data-form="dob" type="date" /></div>
       <div class="field"><label>Full name</label><input class="input" data-form="name" type="text" /></div>
+      <div class="field"><label>Brother or sister</label><div class="cselect">
+        <button type="button" id="sib" aria-haspopup="listbox" onclick="document.getElementById('menu').hidden=false">
+          <span>Select…</span></button>
+        <div id="menu" role="listbox" hidden>
+          <button type="button" onclick="sib.firstElementChild.textContent='Brother';menu.hidden=true">Brother</button>
+          <button type="button" onclick="sib.firstElementChild.textContent='Sister';menu.hidden=true">Sister</button>
+        </div></div></div>
     </body></html>""",
     "/product": "<html><head><title>Lace wig</title></head><body><h1>Lace wig</h1><p>$199</p></body></html>",
 }
@@ -146,6 +153,11 @@ class BrowserTests(unittest.TestCase):
         values = browser._pool.submit(lambda: browser._sessions[sid].page.evaluate(
             "() => [...document.querySelectorAll('input')].map((i) => i.value)")).result(timeout=30)
         self.assertEqual(values, ["1991-03-04", "Test Helper"])
+        self.assertIn("Brother or sister: Select…", [e["label"] for e in page["elements"]])
+        picked = self.run_act(session=sid, action="select", target="Brother or sister", text="Sister")
+        self.assertNotIn("error", picked)
+        self.assertIn("Brother or sister: Sister", [e["label"] for e in picked["elements"]])
+        self.assertIn("error", self.run_act(session=sid, action="select", target="Brother or sister", text="Cousin"))
         self.run_act(session=sid, action="close")
 
     def test_new_tab_mobile_and_blocked_requests(self):

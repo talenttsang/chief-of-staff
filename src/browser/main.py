@@ -176,8 +176,10 @@ ELEMENTS_JS = """(max) => {
     let label = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') ||
                  el.getAttribute('title') || el.getAttribute('alt') || el.getAttribute('name') || '').trim().replace(/\\s+/g, ' ');
     if (!label && el.querySelector('img[alt]')) label = el.querySelector('img[alt]').getAttribute('alt');
-    if (/^(input|select|textarea)$/.test(tag)) {  // a field's name is its label, linked or just next to it
-      const near = (el.labels && el.labels[0]) || (el.parentElement && el.parentElement.querySelector('label'));
+    if (/^(input|select|textarea)$/.test(tag) || el.getAttribute('aria-haspopup') === 'listbox' ||
+        el.getAttribute('role') === 'combobox') {  // a field's name is its label, linked or just next to it
+      let near = el.labels && el.labels[0];
+      for (let p = el.parentElement, i = 0; !near && p && i < 3; p = p.parentElement, i++) near = p.querySelector('label');
       const named = near ? near.innerText.trim().replace(/\\s+/g, ' ').replace(/\\s*\\*$/, '') : '';
       if (named && named !== label) label = label ? named + ': ' + label : named;
     }
@@ -249,13 +251,15 @@ def _snapshot(sid, session, notes=()):
 
 
 FIELDS = "xpath=following::*[self::input[not(@type='hidden')] or self::select or self::textarea][1]"
+DROPDOWNS = "xpath=following::*[self::select or @aria-haspopup='listbox' or @role='combobox'][1]"
 
 
-def _locate(page, target, field=False):
+def _locate(page, target, field=False, dropdown=False):
     """The element meant by `target`: a CSS selector, or visible text, a label, a placeholder.
 
     field=True (typing) looks for a form field first, including one whose label isn't linked to it (a <label>
-    just before the field, as many apps write them)."""
+    just before the field, as many apps write them); dropdown=True the same for a dropdown, native or the
+    app's own."""
     target = target.strip()
     candidates = []
     if re.match(r"^[#.\[]|^[a-z]+[#.\[:]|>", target):
@@ -264,6 +268,10 @@ def _locate(page, target, field=False):
         name = target.split(":")[0].strip()  # an elements label: "Date of birth: 1990-01-01"
         candidates += [page.get_by_label(target), page.get_by_label(name), page.get_by_placeholder(target),
                        page.locator("label", has_text=name).locator(FIELDS)]
+    if dropdown:
+        name = target.split(":")[0].strip()
+        candidates += [page.get_by_label(target), page.get_by_role("combobox", name=target),
+                       page.locator("label", has_text=name).locator(DROPDOWNS)]
     candidates += [page.get_by_role("button", name=target), page.get_by_role("link", name=target),
                    page.get_by_label(target), page.get_by_placeholder(target), page.get_by_role("option", name=target),
                    page.get_by_text(target, exact=True), page.get_by_text(target)]
@@ -393,10 +401,27 @@ def act(body):
         page.keyboard.press(str(body.get("key") or "Enter"))
         page.wait_for_timeout(500)
     elif action == "select":
-        element = _locate(page, str(body.get("target") or "select"))
+        element = _locate(page, str(body.get("target") or "select"), dropdown=True)
         if element is None:
             return {"error": f"No dropdown matches '{body.get('target')}'.", **_snapshot(sid, session)}
-        element.select_option(label=str(body.get("text") or ""))
+        choice = str(body.get("text") or "")
+        if element.evaluate("(el) => el.tagName === 'SELECT'"):
+            element.select_option(label=choice)
+        else:  # the app's own dropdown: open it, then click the option
+            element.click()
+            page.wait_for_timeout(300)
+            option = None
+            for loc in (page.get_by_role("option", name=choice, exact=True),
+                        page.locator("[role=listbox]").get_by_text(choice, exact=True), page.get_by_text(choice, exact=True)):
+                visible = [loc.nth(i) for i in range(min(loc.count(), 5)) if loc.nth(i).is_visible()]
+                if visible:
+                    option = visible[0]
+                    break
+            if option is None:
+                return {"error": f"The dropdown opened but has no option '{choice}'; see the screenshot.",
+                        **_snapshot(sid, session)}
+            option.click()
+            page.wait_for_timeout(300)
     elif action == "scroll":
         sign = -1 if str(body.get("direction") or "down").lower() == "up" else 1
         if body.get("target"):
