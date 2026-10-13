@@ -278,8 +278,10 @@ def _exchange(integration, values, http):
     return result
 
 
-def call(integration_id, method, path, secrets, query=None, body=None, confirmed=False, session=None, google=None):
-    """One request to a company system; returns a JSON-safe dict for the model (never a key)."""
+def call(integration_id, method, path, secrets, query=None, body=None, confirmed=False, session=None, google=None,
+         max_chars=None):
+    """One request to a company system; returns a JSON-safe dict for the model (never a key). max_chars raises the
+    size cut for callers that process the response themselves (github_code reading whole files)."""
     integration = BY_ID.get(integration_id)
     if not integration:
         return {"error": f"unknown system {integration_id}; call list_integrations for the ids"}
@@ -341,8 +343,9 @@ def call(integration_id, method, path, secrets, query=None, body=None, confirmed
         data = text
     out = {"system": integration.label, "status": resp.status_code, "ok": resp.ok}
     rendered = json.dumps(data, ensure_ascii=False, default=str)
-    if len(rendered) > MAX_RESPONSE_CHARS:
-        out.update(truncated=True, data=rendered[:MAX_RESPONSE_CHARS],
+    limit = max_chars or MAX_RESPONSE_CHARS
+    if len(rendered) > limit:
+        out.update(truncated=True, data=rendered[:limit],
                    note="Response cut short; narrow it with filters, limit or paging.")
     else:
         out["data"] = data

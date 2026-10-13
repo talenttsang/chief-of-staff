@@ -11,6 +11,11 @@ unblocking work, and reporting back.
   works on it is not recorded yet. The interview questions ask; record every answer.
 - Code is on GitHub (a `helperconnects` repository exists under the `mannetsang` account; others may be under
   `talenttsang`). Connect GitHub on the Access tab to read repositories, issues, pull requests and CI.
+- HelperXpress's addresses: https://helperxpress.com and the app at https://app.helperxpress.com, spelled
+  help-**er-x**-press, with no "e" before the x. helperexpress.com (with the "e") is someone else's parked domain
+  for sale; it is not ours and says nothing about our site. Only the Google Cloud project id `helperexpress-hk`
+  and the Cloud Run service `helperexpress` are spelled with the "e".
+- Code: Talent-Solutions-Limited/helperxpress on GitHub. To find something in it, search_code then read_code.
 - Hosting: Google Cloud. Project `helperexpress-hk` (HelperXpress) runs the HelperXpress app (Cloud Run `helperexpress`, asia-east1) and Talent Solutions AI itself (us-central1, its own database).
 - Talent Solutions AI's Google account is helperxpresss@gmail.com: its Gmail, Calendar and Drive are what Talent Solutions AI reads
   (Connect Google on the Access tab). Talent Solutions AI doesn't read team chats; ask which tool the team uses to talk.

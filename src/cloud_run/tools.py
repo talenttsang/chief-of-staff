@@ -26,7 +26,7 @@ from store import utcnow_iso
 
 MAX_RESULT_CHARS = 12000
 # The arguments a work-log line shows (in this order), when a call has them.
-STEP_ARGS = ("action", "account", "url", "target", "key", "query", "title", "name", "status", "question", "method", "path", "system",
+STEP_ARGS = ("action", "account", "url", "target", "key", "repo", "pattern", "start_line", "query", "title", "name", "status", "question", "method", "path", "system",
              "partner", "database", "sql", "text")
 # An "answer" that only sets a question aside; such questions are deleted instead of shown as answered.
 NOT_AN_ANSWER = re.compile(r"^\W*(dismiss(ed)?|skip(ped)?|not relevant|irrelevant|n/?a)\b", re.I)
@@ -167,15 +167,26 @@ SPECS = [
      "instructions.",
      _obj({"database": {"type": "string", "enum": databases.configured() or ["none"]}, "sql": _S, "confirmed": _B},
           ["database", "sql"])),
+    ("search_code", "Find lines in a GitHub repository's code: pattern is a regular expression or plain text "
+     "(case-insensitive); path narrows it to a folder or file. Returns path, line number and the line. Use it to find "
+     "where something is handled (a route, a page's text, a function) before reading or changing it.",
+     _obj({"repo": {**_S, "description": "owner/repo, e.g. Talent-Solutions-Limited/helperxpress"}, "pattern": _S,
+           "path": _S}, ["repo", "pattern"])),
+    ("read_code", "Read a file in a GitHub repository by line numbers, up to 400 lines at a time (big files in parts: "
+     "search_code first, then read around the line). Lines come numbered; total_lines says how long the file is.",
+     _obj({"repo": _S, "path": _S, "start_line": _I, "end_line": _I}, ["repo", "path"])),
     ("commit_code", "Change code: ONE commit straight to the main branch of " + (", ".join(github_code.CODE_REPOS)
      or "no repository") + ". No approval is needed, and the push deploys it to production automatically "
-     "(the repository's workflow runs its checks first). First read every file you'll change with call_api GET "
-     "/repos/{owner}/{repo}/contents/{path} (base64), and give each changed file's COMPLETE new content; "
-     "delete=true removes a file. Keep each commit small and focused, with a message that says what changed and "
-     "why. .github/ is off limits. Afterwards check the deploy with call_api GET "
-     "/repos/{owner}/{repo}/actions/runs?head_sha={commit} until it finishes, and report the result.",
+     "(the repository's workflow runs its checks first). First find and read the code (search_code, read_code). "
+     "For each file give edits (a list of {old, new}: old is text copied exactly from the file as it is now, found "
+     "exactly once, with enough lines to be unique; new replaces it), or the COMPLETE new content for a new or "
+     "small file; delete=true removes a file. Keep each commit small and focused, with a message that says what "
+     "changed and why. .github/ is off limits. Afterwards check the deploy with call_api GET "
+     "/repos/{owner}/{repo}/actions/runs?head_sha={commit} until it finishes, then test the fix again.",
      _obj({"repo": {"type": "string", "enum": github_code.CODE_REPOS or ["none"]}, "message": _S,
-           "files": {"type": "array", "items": _obj({"path": _S, "content": _S, "delete": _B}, ["path"])}},
+           "files": {"type": "array", "items": _obj({
+               "path": _S, "content": _S, "delete": _B,
+               "edits": {"type": "array", "items": _obj({"old": _S, "new": _S}, ["old", "new"])}}, ["path"])}},
           ["repo", "message", "files"])),
     ("consult_partner", "Ask another AI partner (claude or chatgpt) for analysis, a draft or a second opinion. "
      "They see the company context you pass in the request.",
@@ -625,6 +636,12 @@ class Toolset:
                 "reason": f"committed to main by {self.caller}; the push deploys it", "sent_by": "assistant",
                 "created_at": now, "executed_at": now})
         return result
+
+    def _t_search_code(self, repo, pattern, path=""):
+        return github_code.search(str(repo).strip(), str(pattern), self.secrets, path=str(path or ""))
+
+    def _t_read_code(self, repo, path, start_line=1, end_line=None):
+        return github_code.read(str(repo).strip(), str(path), self.secrets, start=start_line, end=end_line)
 
     def _t_query_database(self, database, sql, confirmed=False):
         confirmed = bool(confirmed) and self.may_change  # working alone: reading only

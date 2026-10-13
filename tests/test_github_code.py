@@ -19,6 +19,10 @@ API = "https://api.github.com/repos/talenttsang/chief-of-staff"
 class FakeGitHub:
     """Just enough of the Git Data API for one commit; `moves` makes main move under the first update."""
 
+    FILES = {"server.js": "\n".join(f"// line {n}" for n in range(1, 1001)).replace(
+                 "// line 500", "app.post('/stripe/webhook', handleWebhook);"),
+             "public/app.js": "const total = price * qty;\n", "logo.png": "x"}
+
     def __init__(self, moves=0):
         self.calls, self.moves, self.head = [], moves, "c0"
 
@@ -29,6 +33,13 @@ class FakeGitHub:
             body = {"object": {"sha": self.head}}
         elif method == "GET" and path.startswith("/git/commits/"):
             body = {"tree": {"sha": "t-" + path.rsplit("/", 1)[1]}}
+        elif method == "GET" and path.startswith("/contents/"):
+            name = path[len("/contents/"):].split("?")[0]
+            if name not in self.FILES:
+                return SimpleNamespace(status_code=404, ok=False, text='{"message": "Not Found"}')
+            body = {"content": __import__("base64").b64encode(self.FILES[name].encode()).decode(), "sha": "b-" + name}
+        elif method == "GET" and path.startswith("/git/trees/"):
+            body = {"tree": [{"path": n, "type": "blob", "size": len(c)} for n, c in self.FILES.items()]}
         elif method == "POST" and path == "/git/trees":
             body = {"sha": "t-new"}
         elif method == "POST" and path == "/git/commits":
@@ -83,6 +94,26 @@ class CommitTests(unittest.TestCase):
         self.assertIn("full new content", self.commit([{"path": "a.py"}])["error"])
         self.assertIn("message", self.commit([{"path": "a.py", "content": ""}], message=" ")["error"])
         self.assertEqual(self.gh.calls, [])  # nothing reached GitHub
+
+    def test_search_then_read_a_big_file_in_parts(self):
+        found = github_code.search("talenttsang/chief-of-staff", "stripe/webhook", self.secrets, http=self.gh)
+        self.assertEqual(found["matches"], [{"path": "server.js", "line": 500,
+                                             "text": "app.post('/stripe/webhook', handleWebhook);"}])
+        self.assertEqual(found["files_searched"], 2)  # text files only: not logo.png
+        part = github_code.read("talenttsang/chief-of-staff", "server.js", self.secrets, start=495, end=505, http=self.gh)
+        self.assertEqual((part["total_lines"], part["from"], part["to"]), (1000, 495, 505))
+        self.assertIn("500: app.post('/stripe/webhook'", part["text"])
+        big = github_code.read("talenttsang/chief-of-staff", "server.js", self.secrets, http=self.gh)
+        self.assertEqual((big["to"], big["more"]), (400, "read on with start_line=401"))
+
+    def test_a_commit_can_edit_part_of_a_file(self):
+        result = self.commit([{"path": "server.js", "edits": [{"old": "handleWebhook);", "new": "handleStripe);"}]}])
+        self.assertTrue(result["committed"], result)
+        sent = [c for c in self.gh.calls if c[1].endswith("/git/trees") and c[0] == "POST"][0][2]["tree"][0]
+        self.assertIn("app.post('/stripe/webhook', handleStripe);", sent["content"])
+        self.assertEqual(sent["content"].count("\n"), 999)  # the rest of the file is untouched
+        twice = self.commit([{"path": "server.js", "edits": [{"old": "// line 1", "new": "x"}]}])
+        self.assertIn("appears", twice["error"])  # "// line 1" is in lines 1, 10-19, 100-199...: ambiguous
 
     def test_the_tool_records_the_commit(self):
         store = MemoryStore()

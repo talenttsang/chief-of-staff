@@ -856,7 +856,7 @@ const STEP_LABEL = {
   task_started: "開始處理任務", task_done: "完成任務", task_paused: "暫停任務", task_failed: "任務出錯",
   task_report: "進度報告（繼續處理）", task_needs_you: "需要你回答", task_interrupted: "工作被中斷",
   browser: "瀏覽器", web_search: "搜尋網頁", read_webpage: "閱讀網頁", call_api: "查詢系統", query_database: "查詢資料庫",
-  commit_code: "提交程式碼", start_task: "交給自己處理", create_task: "新增任務", update_task: "更新任務",
+  commit_code: "提交程式碼", search_code: "搜尋程式碼", read_code: "閱讀程式碼", start_task: "交給自己處理", create_task: "新增任務", update_task: "更新任務",
   delete_task: "刪除任務", list_tasks: "查看工作板", save_project: "儲存項目", delete_project: "刪除項目",
   record_fact: "記錄資料", delete_fact: "刪除資料", ask_owner: "提出問題", answer_question: "記錄答案",
   delete_question: "刪除問題", list_questions: "查看問題", search_knowledge: "搜尋知識庫", company_overview: "查看公司概覽",
