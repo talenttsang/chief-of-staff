@@ -17,7 +17,7 @@ TALK_MODEL = os.environ.get("TALK_MODEL", os.environ.get("GEMINI_MODEL", "gemini
 VISION_MODEL = os.environ.get("VISION_MODEL", "gemini-2.5-flash")  # describes screenshots on live calls
 MAX_STEPS = 24  # research chains many lookups: search, read, query, compare
 
-LABEL = "Man AI (Gemini)"
+LABEL = "Talent Solutions AI (Gemini)"
 _creds = None
 
 

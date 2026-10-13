@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-time setup for Man AI (Cloud Run service chat-assistant). Run by a project Owner in
+# One-time setup for Talent Solutions AI (Cloud Run service chat-assistant). Run by a project Owner in
 # Cloud Shell; safe to re-run.
 #
 # It does only what the deploying identity (stephen@, used by Claude sessions) isn't allowed
@@ -67,4 +67,4 @@ args=(--location $REGION --project $PROJECT --schedule "0 * * * *" --time-zone A
 gcloud scheduler jobs update http chat-assistant-hourly "${args[@]}" --update-headers "X-Run-Token=$TOKEN" >/dev/null 2>&1 \
   || gcloud scheduler jobs create http chat-assistant-hourly "${args[@]}" --headers "X-Run-Token=$TOKEN" >/dev/null
 
-echo "Man AI setup done: service account, secrets and hourly job are in place."
+echo "Talent Solutions AI setup done: service account, secrets and hourly job are in place."

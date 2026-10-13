@@ -21,7 +21,7 @@ import knowledge
 from store import utcnow_iso
 
 MAX_RESULT_CHARS = 12000
-# The browser service (src/browser), called with Man AI's own identity. Empty: the browser tool isn't offered.
+# The browser service (src/browser), called with Talent Solutions AI's own identity. Empty: the browser tool isn't offered.
 BROWSER_URL = os.environ.get("BROWSER_URL", "").rstrip("/")
 BROWSER_ACTIONS = ["open", "goto", "click", "type", "press", "select", "scroll", "back", "forward", "reload",
                    "screenshot", "close"]
@@ -428,7 +428,7 @@ _browser_token_lock = threading.Lock()
 
 
 def _browser_call(body):
-    """POST one action to the browser service, as Man AI (an ID token for the service's URL)."""
+    """POST one action to the browser service, as Talent Solutions AI (an ID token for the service's URL)."""
     import requests
 
     with _browser_token_lock:

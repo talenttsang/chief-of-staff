@@ -26,7 +26,7 @@ _company_cache = None
 SEED_SYSTEMS = [
     ("google_calendar", "Google Calendar", "Communication", "connected", "Read and create calendar events."),
     # The AI rows' status is kept true by talk.Talk.test_partners (Check connections and every hourly run).
-    ("gemini", "Gemini (Vertex AI)", "AI", "connected", "Man AI's own brain and voice."),
+    ("gemini", "Gemini (Vertex AI)", "AI", "connected", "Talent Solutions AI's own brain and voice."),
     ("chatgpt", "ChatGPT (OpenAI)", "AI partner", "needed",
      "Second opinions, drafts and live voice calls from ChatGPT. Needs CHATGPT_API_KEY in Secret Manager."),
     ("claude", "Claude (Anthropic)", "AI partner", "needed",
@@ -80,7 +80,7 @@ def vocabulary(store):
 
 def name_hints(store, limit=900):
     """A short list of names for speech-to-text: company terms, people and places, projects, systems."""
-    names = ["HelperConnects", "HelperXpress", "Man AI", "GitHub"]
+    names = ["HelperConnects", "HelperXpress", "Talent Solutions AI", "GitHub"]
     for line in company_background().splitlines():
         if line.startswith("|") and not line.startswith("|--") and "`" not in line:
             for cell in line.strip("|").split("|"):

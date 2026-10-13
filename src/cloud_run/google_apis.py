@@ -1,4 +1,4 @@
-"""Calls to Google as Man AI's Google account (GOOGLE_ACCOUNT), with its own OAuth token.
+"""Calls to Google as Talent Solutions AI's Google account (GOOGLE_ACCOUNT), with its own OAuth token.
 
 The token can only see and do what that account could itself: its Gmail, Calendar and Drive, and the Google
 tools on the Access tab (integrations.py calls them through GoogleClient.auth_header).
@@ -76,7 +76,7 @@ class GoogleClient:
             return {"Authorization": f"Bearer {self.creds.token}"}
 
     def auth_header(self):
-        """For integrations.py: Google APIs called with Man AI's Google sign-in."""
+        """For integrations.py: Google APIs called with Talent Solutions AI's Google sign-in."""
         return self._auth()
 
     def request(self, method, url, params=None, body=None):

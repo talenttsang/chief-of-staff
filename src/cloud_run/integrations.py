@@ -34,7 +34,7 @@ import requests
 MAX_RESPONSE_CHARS = 10000
 TEAMDESK_DATABASE_ID = os.environ.get("TEAMDESK_DATABASE_ID", "56554")  # as trustpilot-pipeline uses
 TRUSTPILOT_BU = "5e44f707d7d8c700011eaa10"  # our Trustpilot business unit, from trustpilot-pipeline
-# The app's own Google identity: share a Drive folder or a calendar with this address and Man AI can read it.
+# The app's own Google identity: share a Drive folder or a calendar with this address and Talent Solutions AI can read it.
 SERVICE_ACCOUNT = os.environ.get("SERVICE_ACCOUNT_EMAIL") or \
     f"chat-assistant@{os.environ.get('GCP_PROJECT', 'helperexpress-hk')}.iam.gserviceaccount.com"
 READ_METHODS = {"GET", "HEAD"}
@@ -123,7 +123,7 @@ def _bigcommerce(store_hash, token_secret, storefront, currency, system_id, past
         probe=BIGCOMMERCE_PROBES, system_id=system_id, category="Commerce", labeler=_bigcommerce_label,
         **({"kind": "paste", "fields": [(token_secret, "Access token of a store-level API account", "", True)],
             "help": (f"In the {storefront} BigCommerce admin: Settings > API > Store-level API accounts > Create API "
-                     "account (token type: V2/V3 API token). Name it \"Man AI\" and set Orders, Products, "
+                     "account (token type: V2/V3 API token). Name it \"Talent Solutions AI\" and set Orders, Products, "
                      "Customers and Information & settings to read-only (or modify, if the assistant may change "
                      "them). Save, then copy the Access token (BigCommerce shows it once) and paste it here.")}
            if paste else {}))
@@ -393,25 +393,25 @@ REGISTRY += GOOGLE
 
 OWN = [  # read as the app's own service account: what people share with SERVICE_ACCOUNT, no one's sign-in
     Integration(
-        id="shared_drive", label="Drive shared with Man AI", secrets=[], base="https://www.googleapis.com",
+        id="shared_drive", label="Drive shared with Talent Solutions AI", secrets=[], base="https://www.googleapis.com",
         kind="self", scopes=["https://www.googleapis.com/auth/drive.readonly"],
-        hint=(f"Files and folders people shared with Man AI's own address, {SERVICE_ACCOUNT}. Read-only. "
+        hint=(f"Files and folders people shared with Talent Solutions AI's own address, {SERVICE_ACCOUNT}. Read-only. "
               "GET /drive/v3/files with query {\"q\": \"sharedWithMe\", \"fields\": \"files(id,name,mimeType,"
               "modifiedTime,owners(emailAddress),webViewLink)\"} lists what's shared; a folder's contents: query "
               "{\"q\": \"'FOLDER_ID' in parents\", \"fields\": ...}. A Google Doc as text: "
               "/drive/v3/files/{id}/export?mimeType=text/plain (a Sheet's first tab: mimeType=text/csv); "
-              "other files: /drive/v3/files/{id}?alt=media. A 404 means it isn't shared with Man AI."),
+              "other files: /drive/v3/files/{id}?alt=media. A 404 means it isn't shared with Talent Solutions AI."),
         probe="/drive/v3/about?fields=user", system_id="shared_drive", category="Documents",
         services=["drive.googleapis.com"]),
     Integration(
-        id="shared_calendar", label="Calendars shared with Man AI", secrets=[], base="https://www.googleapis.com",
+        id="shared_calendar", label="Calendars shared with Talent Solutions AI", secrets=[], base="https://www.googleapis.com",
         kind="self", scopes=["https://www.googleapis.com/auth/calendar.readonly"],
-        hint=(f"Calendars people shared with Man AI's own address, {SERVICE_ACCOUNT}. Read-only. A shared "
+        hint=(f"Calendars people shared with Talent Solutions AI's own address, {SERVICE_ACCOUNT}. Read-only. A shared "
               "calendar isn't listed anywhere: read it by its id, which for someone's main calendar is their email "
               "with @ written as %40: GET /calendar/v3/calendars/name%40gmail.com/events with query {\"timeMin\": "
               "\"2026-10-13T00:00:00Z\", \"timeMax\": \"...\", \"singleEvents\": \"true\", \"orderBy\": "
               "\"startTime\"}. Other calendars' ids are in their Google Calendar settings (Integrate calendar). "
-              "A 404 means it isn't shared with Man AI."),
+              "A 404 means it isn't shared with Talent Solutions AI."),
         probe="/calendar/v3/users/me/calendarList?maxResults=1", system_id="shared_calendar", category="Communication",
         services=["calendar-json.googleapis.com"]),
 ]
@@ -434,7 +434,7 @@ REGISTRY += [  # engineering
         help=("On GitHub, signed in as the account that owns the code: Settings > Developer settings > Personal "
               "access tokens > Fine-grained tokens > Generate new token. Resource owner: that account. Repository "
               "access: the HelperConnects and HelperXpress repositories. Permissions (Read): Contents, Issues, Pull "
-              "requests, Actions, Metadata; make Issues and Pull requests Read and write if Man AI may open issues or "
+              "requests, Actions, Metadata; make Issues and Pull requests Read and write if Talent Solutions AI may open issues or "
               "comment after your OK. Generate, copy the token and paste it here.")),
 ]
 

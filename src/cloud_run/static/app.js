@@ -1,4 +1,4 @@
-// Man AI: board, knowledge base, interview, access, and the chat window. Voice lives in voice.js.
+// Talent Solutions AI: board, knowledge base, interview, access, and the chat window. Voice lives in voice.js.
 "use strict";
 
 const STATUS_ORDER = ["todo", "in_progress", "done"];
@@ -136,7 +136,7 @@ function renderBanners() {
   const box = $("banners"); box.replaceChildren();
   if (!state.connected) {
     box.append(el("div", { class: "banner" },
-      el("span", {}, el("b", {}, "Connect Google. "), `Man AI reads Gmail, Calendar and Drive as ${state.google_account || "your Google account"}. Press Connect and sign in to Google as that account.`),
+      el("span", {}, el("b", {}, "Connect Google. "), `Talent Solutions AI reads Gmail, Calendar and Drive as ${state.google_account || "your Google account"}. Press Connect and sign in to Google as that account.`),
       el("a", { class: "btn primary", href: "/connect/google" }, "Connect")));
   } else if (state.status.connection_error) {
     box.append(el("div", { class: "banner bad" },
@@ -146,7 +146,7 @@ function renderBanners() {
   if ((state.status.missing_scopes || []).length) {
     const what = state.status.missing_scopes.map((s) => SCOPE_LABEL[s] || s);
     box.append(el("div", { class: "banner" },
-      el("span", {}, el("b", {}, "Man AI needs your OK in Google for: "), what.join(", "),
+      el("span", {}, el("b", {}, "Talent Solutions AI needs your OK in Google for: "), what.join(", "),
         ". Press Reconnect and allow everything Google asks."),
       el("a", { class: "btn primary", href: "/connect/google" }, "Reconnect")));
   }
@@ -275,13 +275,13 @@ function setChat(open, focus = true) {
 
 function renderLauncher() {
   const onCall = !$("voicebar").hidden;
-  const label = onCall ? "On a call · Man AI" : "Man AI";
+  const label = onCall ? "On a call · Talent Solutions AI" : "Talent Solutions AI";
   $("chatLauncher").replaceChildren(...[onCall ? el("span", { class: "pulse", "aria-hidden": "true" }) : el("span", { "aria-hidden": "true" }, "💬"),
     label, unread && !onCall ? el("span", { class: "badge", title: "New reply" }) : null].filter(Boolean));
   $("chatLauncher").setAttribute("aria-label", `${label}${unread ? " (new reply)" : ""}. Open the chat`);
 }
 
-// Opens the chat with Man AI and a message ready to send (from Questions and Access).
+// Opens the chat with Talent Solutions AI and a message ready to send (from Questions and Access).
 function askInChat(text) {
   setChat(true);
   if (partner !== "assistant") selectPartner("assistant");
@@ -469,12 +469,12 @@ function showTaskReport(t) {
 }
 
 $("workTask").onclick = async () => {
-  if (!editing) { toast("Save the task first, then give it to Man AI."); return; }
+  if (!editing) { toast("Save the task first, then give it to Talent Solutions AI."); return; }
   const t = editing;
   $("taskDialog").close();
   state.tasks = state.tasks.map((x) => (x.id === t.id ? { ...x, owner: "Assistant", owner_is_me: false, working_since: new Date().toISOString() } : x));
   renderBoard();
-  toast(`Man AI is working on “${t.title}”. Its report will appear on the task and in the chat.`);
+  toast(`Talent Solutions AI is working on “${t.title}”. Its report will appear on the task and in the chat.`);
   try {
     const { task, done } = await api("POST", `/api/tasks/${encodeURIComponent(t.id)}/work`);
     state.tasks = state.tasks.map((x) => (x.id === t.id ? task : x));

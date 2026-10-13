@@ -1,13 +1,13 @@
-# Man AI: features
+# Talent Solutions AI: features
 
-Man AI is the chief of staff for **HelperConnects** and **HelperXpress**: it learns
+Talent Solutions AI is the chief of staff for **HelperConnects** and **HelperXpress**: it learns
 every project, follows the code, gets access to the businesses' systems, does the
 work, and reports back. You talk to it in text or live voice, alongside two AI
 partners, Claude and ChatGPT. The Cloud Run service is still called `chat-assistant`.
 Setup and deployment: [README.md](README.md).
 
 **The chat** isn't a tab: it's a window at the bottom right, over every tab, so you can talk while you look at
-the board or the Access list. **–** (or Esc) minimizes it to a **💬 Man AI** button. The button gets a red dot
+the board or the Access list. **–** (or Esc) minimizes it to a **💬 Talent Solutions AI** button. The button gets a red dot
 when a reply arrives while it's minimized, and reads **On a call** while a voice call is running (a call keeps
 going while it's minimized). Open or minimized is remembered per browser; the first time, it starts open on a
 computer and minimized on a phone, where the open chat fills the screen.
@@ -19,8 +19,8 @@ not be the owner. The models ask who it is when it matters (an approval, a fact 
 
 | Where | What it's for |
 |---|---|
-| **Chat** (bottom right) | Chat with **Man AI** (Gemini), **Claude** or **ChatGPT**. Each one has the same company background, knowledge base and tools, and its own conversation history. **🎙 Talk** starts a live voice call with whichever of the three is selected. **🔊** on a reply reads it aloud (press again to stop); **🔊 Read aloud** in the chat's header reads each new typed reply automatically. |
-| **Board** | Tasks: yours, and the ones you give to Man AI. |
+| **Chat** (bottom right) | Chat with **Talent Solutions AI** (Gemini), **Claude** or **ChatGPT**. Each one has the same company background, knowledge base and tools, and its own conversation history. **🎙 Talk** starts a live voice call with whichever of the three is selected. **🔊** on a reply reads it aloud (press again to stop); **🔊 Read aloud** in the chat's header reads each new typed reply automatically. |
+| **Board** | Tasks: yours, and the ones you give to Talent Solutions AI. |
 | **Projects** | Every project it knows, per business: goal, owner, status, deadline, next steps and open tasks. |
 | **Questions** | The interview: what it needs to know, highest priority first. Answer in the box, in the chat (**Discuss in chat**), or by voice; each answer is processed into projects, facts, tasks and follow-up questions. |
 | **Access** | Systems it can use now, those with credentials that aren't connected yet, and those it still needs. **How do I connect this?** asks it to walk you through one. |
@@ -72,7 +72,7 @@ each needs. `CLAUDE_BACKEND=anthropic` or `=vertex` pins one route.
 16 kHz 16-bit PCM from the microphone (with echo cancellation), the service relays
 it to **Gemini 3.8 Live** (`gemini-3.8-live` on Vertex AI), and streams the spoken
 answer back at 24 kHz. You can interrupt it; the transcript appears live and is
-saved into Man AI's chat conversation. During a call it uses the same tools as
+saved into Talent Solutions AI's chat conversation. During a call it uses the same tools as
 text. Use Chrome or Edge. Only a signed-in session, from the app's own page, can
 open the voice socket.
 
@@ -104,12 +104,12 @@ Every partner is told to use its access before answering: look things up in the
 connected systems (`list_integrations`, `call_api`), query the HelperXpress database
 (`query_database`), and chain up to 24 tool calls per answer.
 
-**Board → a task → 🤖 Give to Man AI** makes the assistant the task's owner and has
+**Board → a task → 🤖 Give to Talent Solutions AI** makes the assistant the task's owner and has
 it work the task right away (`worker.py`); each hourly run works up to `WORK_PER_RUN`
 (3) of its open tasks again, any it hasn't touched for six hours. Working alone it
 can't change data (it prepares the exact change and asks for your OK). When a task
 is finished it marks it done. Its report appears on the task (and a 🤖 report badge
-on the card) and in Man AI's chat conversation.
+on the card) and in Talent Solutions AI's chat conversation.
 
 ## Company systems
 
@@ -123,7 +123,7 @@ offers only those named in `INTEGRATIONS`. The live app offers:
 | GitHub | A token pasted in the Access tab (`GITHUB_TOKEN`): repositories, issues, pull requests, CI |
 | HelperXpress database | `query_database` on the Postgres URL in `SUPABASE_DB_URL` (`DATABASES=helperxpress=SUPABASE_DB_URL`) |
 | Gmail, Calendar, Drive | Connect Google, as helperxpresss@gmail.com |
-| Drive folders and calendars shared with Man AI | Shared with chat-assistant@helperexpress-hk.iam.gserviceaccount.com; nothing to connect |
+| Drive folders and calendars shared with Talent Solutions AI | Shared with chat-assistant@helperexpress-hk.iam.gserviceaccount.com; nothing to connect |
 
 `integrations.py` also has connectors from the app's earlier use (BigCommerce, Amazon,
 Walmart, SkuVault, Airtable, Notion, Figma, Trustpilot, web research and others). Add
@@ -152,7 +152,7 @@ straight into Secret Manager and is tested at once.
 
 ## Web browser
 
-Man AI can open web pages in a real browser and **see** them: every `browser` call does one action (open,
+Talent Solutions AI can open web pages in a real browser and **see** them: every `browser` call does one action (open,
 click, type, press a key, pick an option, scroll, back, screenshot) and shows the model a screenshot of the
 result, plus what's clickable and the visible text. Use it for how a page looks or works, including the
 HelperXpress app itself and the mobile view (`device=mobile`). All three models see the screenshots; on a live
@@ -160,8 +160,8 @@ call Gemini Flash describes the screenshot instead.
 
 The browser is its own Cloud Run service, `web-browser` (`src/browser/`): Playwright's Chromium, one instance at
 most (open tabs live in its memory, closed after 10 idle minutes; at most 4), scaled to zero when unused. It
-runs as `web-browser@helperexpress-hk.iam.gserviceaccount.com`, which holds **no** roles, and only Man AI's
-service account may call it. Man AI finds it through `BROWSER_URL`; without it the tool isn't offered.
+runs as `web-browser@helperexpress-hk.iam.gserviceaccount.com`, which holds **no** roles, and only Talent Solutions AI's
+service account may call it. Talent Solutions AI finds it through `BROWSER_URL`; without it the tool isn't offered.
 
 Guards in the service itself, whatever the model asks:
 - only http(s) to public addresses: localhost, private and link-local ranges (the metadata server), and

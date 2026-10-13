@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Man AI</title>
+  <title>Talent Solutions AI</title>
   {% include "_theme.html" %}
   <style>
     header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -92,7 +92,7 @@
     table.runs th { color: var(--muted); font-weight: 500; background: var(--panel-2); white-space: nowrap; }
     table.runs td.err { color: var(--bad); }
     .tablewrap { overflow-x: auto; }
-    /* Man AI chat: a window at the bottom right, over every tab, that minimizes to a button */
+    /* Talent Solutions AI chat: a window at the bottom right, over every tab, that minimizes to a button */
     main { padding-bottom: 96px; }  /* room for the minimized button */
     .chatwin { position: fixed; right: 20px; bottom: 20px; z-index: 15; width: min(420px, calc(100vw - 40px));
       height: min(680px, calc(100vh - 40px)); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px;
@@ -175,7 +175,7 @@
 </head>
 <body data-version="{{ version }}">
 <header>
-  <div class="brand"><span class="dot" id="dot"></span>Man AI</div>
+  <div class="brand"><span class="dot" id="dot"></span>Talent Solutions AI</div>
   <div class="lastrun" id="lastrun">Loading…</div>
   <label class="toggle" title="When off, everything the assistant would do waits for your approval">
     <input type="checkbox" id="autoAct"><span class="track"></span><span>Act automatically</span>
@@ -235,14 +235,14 @@
   </section>
 
   <section id="view-questions" hidden>
-    <p class="hint">What Man AI needs to know to run things on its own. Answer here, or in the chat at the bottom right, typed or out loud with 🎙 Talk.</p>
+    <p class="hint">What Talent Solutions AI needs to know to run things on its own. Answer here, or in the chat at the bottom right, typed or out loud with 🎙 Talk.</p>
     <div id="openQuestions"></div>
     <h3>Answered</h3>
     <div id="answeredQuestions"></div>
   </section>
 
   <section id="view-access" hidden>
-    <p class="hint">Systems Man AI can use, and the ones it still needs. Ask it in the chat how to connect any of them; it will walk you through it.</p>
+    <p class="hint">Systems Talent Solutions AI can use, and the ones it still needs. Ask it in the chat how to connect any of them; it will walk you through it.</p>
     <div class="banner" id="setupBanner" style="white-space: pre-line" hidden></div>
     <p class="actions"><a class="btn primary" href="/connect/setup" id="connectAll">Connect everything</a>
       <button class="btn" id="checkSystems">Check connections</button>
@@ -261,9 +261,9 @@
   </section>
 </main>
 
-<aside class="chatwin" id="chat" aria-label="Man AI chat">
+<aside class="chatwin" id="chat" aria-label="Talent Solutions AI chat">
   <div class="chathead">
-    <h2>Man AI</h2>
+    <h2>Talent Solutions AI</h2>
     <button class="hbtn" id="readAloud" aria-pressed="false" title="Read new replies aloud">🔊 Read aloud</button>
     <button class="hbtn" id="clearTalk" title="Start a new conversation">Clear</button>
     <button class="hbtn min" id="minimizeChat" title="Minimize" aria-label="Minimize chat">–</button>
@@ -279,13 +279,13 @@
       <button class="btn danger" id="vend">End call</button>
     </div>
     <div class="composer" id="composer">
-      <textarea id="message" placeholder="Message Man AI…" aria-label="Message" title="Enter to send, Shift+Enter for a new line"></textarea>
+      <textarea id="message" placeholder="Message Talent Solutions AI…" aria-label="Message" title="Enter to send, Shift+Enter for a new line"></textarea>
       <button class="btn mic" id="startVoice" title="Talk live">🎙 Talk</button>
       <button class="btn primary" id="send">Send</button>
     </div>
   </div>
 </aside>
-<button class="launcher" id="chatLauncher" aria-controls="chat" aria-expanded="true" hidden>💬 Man AI</button>
+<button class="launcher" id="chatLauncher" aria-controls="chat" aria-expanded="true" hidden>💬 Talent Solutions AI</button>
 
 <dialog id="taskDialog">
   <form method="dialog" id="taskForm">
@@ -306,7 +306,7 @@
     <div class="dialog-foot">
       <button type="button" class="btn danger left" id="deleteTask">Delete</button>
       <button type="button" class="btn" id="cancelTask">Cancel</button>
-      <button type="button" class="btn" id="workTask" title="Man AI works on it now with its tools, and again every hour until it's done">🤖 Give to Man AI</button>
+      <button type="button" class="btn" id="workTask" title="Talent Solutions AI works on it now with its tools, and again every hour until it's done">🤖 Give to Talent Solutions AI</button>
       <button type="submit" class="btn primary">Save</button>
     </div>
   </form>

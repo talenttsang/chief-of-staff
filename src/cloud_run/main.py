@@ -1,9 +1,9 @@
-"""Man AI: a chief of staff that keeps a project board, learns the businesses and works its own tasks.
+"""Talent Solutions AI: a chief of staff that keeps a project board, learns the businesses and works its own tasks.
 
 Routes
   GET  /                 the board (the password page when signed out)
   POST /login            sign in with the password
-  GET  /connect/google   connect Man AI's Google account (GOOGLE_ACCOUNT): Gmail, Calendar, Drive, ...
+  GET  /connect/google   connect Talent Solutions AI's Google account (GOOGLE_ACCOUNT): Gmail, Calendar, Drive, ...
   GET  /oauth/callback   OAuth redirect target
   POST /logout
   POST /api/password     change the password (everyone else is signed out)
@@ -18,7 +18,7 @@ Sign-in is one shared password, kept in Secret Manager (chat-assistant-password)
 sign-in. A browser stays signed in for SESSION_DAYS after its last visit, until the password changes.
 Wrong passwords are limited per address and overall (LOGIN_LIMITS).
 
-Man AI's Google account (GOOGLE_ACCOUNT) is connected once with Connect Google; its token lives in
+Talent Solutions AI's Google account (GOOGLE_ACCOUNT) is connected once with Connect Google; its token lives in
 Secret Manager (chat-assistant-user-token), readable only by this service's own service account. A
 token from any other account is ignored.
 """
@@ -48,7 +48,7 @@ from talk import PARTNERS, Talk
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "manne@superhairpieces.com").lower()
-# The Google account Man AI reads Gmail, Calendar and Drive as. Connect Google accepts only this one.
+# The Google account Talent Solutions AI reads Gmail, Calendar and Drive as. Connect Google accepts only this one.
 GOOGLE_ACCOUNT = os.environ.get("GOOGLE_ACCOUNT", OWNER_EMAIL).lower()
 PASSWORD_SECRET_ID = os.environ.get("PASSWORD_SECRET_ID", "chat-assistant-password")
 SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "365"))
@@ -93,7 +93,7 @@ def google_token():
 
 
 def make_google():
-    """Man AI's Google client, or None before GOOGLE_ACCOUNT is connected."""
+    """Talent Solutions AI's Google client, or None before GOOGLE_ACCOUNT is connected."""
     token = google_token()
     return GoogleClient(credentials_from_json(token)) if token else None
 
@@ -220,7 +220,7 @@ def login():
 
 @app.get("/connect/google")
 def connect_google():
-    """Connect Man AI's Google account (GOOGLE_ACCOUNT): offline, every scope it uses."""
+    """Connect Talent Solutions AI's Google account (GOOGLE_ACCOUNT): offline, every scope it uses."""
     if not signed_in():
         return redirect("/")
     if not oauth_client_config():
@@ -282,7 +282,7 @@ def oauth_callback():
     if not claims.get("email_verified"):
         return oauth_error(f"Google hasn't verified {email or 'that account'}'s email address.", 403)
     # Connect everything acts as whoever owns the Cloud project (Google checks what that account may do);
-    # Man AI's own Google access must be GOOGLE_ACCOUNT's.
+    # Talent Solutions AI's own Google access must be GOOGLE_ACCOUNT's.
     if pending["connect"] and GOOGLE_ACCOUNT and email != GOOGLE_ACCOUNT:
         return oauth_error(f"That was {email}. Connect Google as {GOOGLE_ACCOUNT}: press Connect again and pick "
                            "that account (or \"Use another account\").", 403)

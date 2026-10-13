@@ -14,7 +14,7 @@ from store import MemoryStore  # noqa: E402
 
 
 class FakeGoogle:
-    """Man AI's Google account: every call answers empty, and is recorded."""
+    """Talent Solutions AI's Google account: every call answers empty, and is recorded."""
 
     def __init__(self):
         self.calls = []
@@ -69,7 +69,7 @@ class WebTests(unittest.TestCase):
         self.assertIn(b'id="chat"', page.data)          # the chat window, over every tab
         self.assertIn(b'id="chatLauncher"', page.data)  # what it minimizes to
         self.assertNotIn(b'data-tab="talk"', page.data)
-        self.assertIn(b"<title>Man AI</title>", page.data)
+        self.assertIn(b"<title>Talent Solutions AI</title>", page.data)
         self.assertEqual(page.headers["X-Frame-Options"], "DENY")
 
     def test_other_account_session_is_rejected(self):

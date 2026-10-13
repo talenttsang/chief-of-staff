@@ -1,4 +1,4 @@
-"""Persistence for Man AI: Firestore for app data, Secret Manager for credentials.
+"""Persistence for Talent Solutions AI: Firestore for app data, Secret Manager for credentials.
 
 Both have an in-memory twin with the same interface, selected with
 STORE_BACKEND=memory, so the app and the hourly run can be exercised locally

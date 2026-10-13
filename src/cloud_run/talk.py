@@ -21,19 +21,19 @@ TZ = ZoneInfo("America/Toronto")
 # Each partner's row on the Access tab: (system id, name, what it's for). Its status comes from test_partners,
 # a real call to each model, so it says what's true rather than what was true when the row was first written.
 PARTNER_SYSTEMS = {
-    "assistant": ("gemini", "Gemini (Vertex AI)", "Man AI's own brain and voice."),
+    "assistant": ("gemini", "Gemini (Vertex AI)", "Talent Solutions AI's own brain and voice."),
     "claude": ("claude", "Claude (Anthropic)", "Second opinions and drafts from Claude: the Claude API first, "
                "Vertex AI if that fails. On calls it's heard through ChatGPT's voice line."),
     "chatgpt": ("chatgpt", "ChatGPT (OpenAI)", "Second opinions, drafts and live voice calls from ChatGPT."),
 }
 
 ROLE = {
-    "assistant": ("You are Man AI, chief of staff for HelperConnects and HelperXpress: project management and "
+    "assistant": ("You are Talent Solutions AI, chief of staff for HelperConnects and HelperXpress: project management and "
                   "software engineering."),
     "claude": ("You are Claude, made by Anthropic, one of Manne's AI partners at HelperConnects and HelperXpress, "
-               "working alongside Man AI (the company's own assistant, on Gemini) and ChatGPT."),
+               "working alongside Talent Solutions AI (the company's own assistant, on Gemini) and ChatGPT."),
     "chatgpt": ("You are ChatGPT, made by OpenAI, one of Manne's AI partners at HelperConnects and HelperXpress, "
-                "working alongside Man AI (the company's own assistant, on Gemini) and Claude."),
+                "working alongside Talent Solutions AI (the company's own assistant, on Gemini) and Claude."),
 }
 
 MISSION = """\

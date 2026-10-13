@@ -12,7 +12,7 @@ from store import utcnow_iso
 
 
 class ReconnectNeeded(RuntimeError):
-    """Man AI's Google token was revoked or expired; Connect Google again."""
+    """Talent Solutions AI's Google token was revoked or expired; Connect Google again."""
 
 
 def error_text(exc, limit=300):

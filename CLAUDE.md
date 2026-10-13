@@ -1,4 +1,4 @@
-# Man AI (HelperConnects / HelperXpress) – Agent Instructions
+# Talent Solutions AI (HelperConnects / HelperXpress) – Agent Instructions
 
 ## Agent Behavior
 
@@ -31,8 +31,8 @@ handing over a command to run:
 ## Data & Credentials
 
 **GCP project:** `helperexpress-hk` (talenttsang's). It runs the HelperXpress app
-(Cloud Run `helperexpress`, asia-east1) and Man AI (Cloud Run `chat-assistant` and
-`web-browser`, us-central1). Man AI keeps its data in its own Firestore database,
+(Cloud Run `helperexpress`, asia-east1) and Talent Solutions AI (Cloud Run `chat-assistant` and
+`web-browser`, us-central1). Talent Solutions AI keeps its data in its own Firestore database,
 `chat-assistant`.
 
 All credentials live in that project's **Secret Manager**; nothing sensitive goes
@@ -40,13 +40,13 @@ in the repo, in a GitHub Actions *variable*, or in a Claude cloud environment's
 *environment variables* box. Never read secrets from `shp-ai-bot-2026` (mannetsang's
 project): the app refuses to start if `SECRETS_PROJECT` points there.
 
-Secrets Man AI uses:
+Secrets Talent Solutions AI uses:
 
 | Secret | What it is |
 |---|---|
 | `chat-assistant-password` | The shared sign-in password |
 | `chat-assistant-oauth-client` | OAuth client for Connect Google |
-| `chat-assistant-user-token` | Token for Man AI's Google account (helperxpresss@gmail.com) |
+| `chat-assistant-user-token` | Token for Talent Solutions AI's Google account (helperxpresss@gmail.com) |
 | `chat-assistant-run-token` | Shared token Cloud Scheduler sends to `/run` |
 | `SUPABASE_DB_URL` | HelperXpress Postgres (Supabase), used by `query_database` |
 | `GITHUB_TOKEN` | GitHub, pasted in the Access tab |
@@ -79,11 +79,11 @@ Roll back with `gcloud run services update-traffic chat-assistant --to-revisions
 The company background the app gives every model is
 `src/cloud_run/knowledge/company.md`; keep it current there. In short:
 
-- **HelperConnects** and **HelperXpress** are the two businesses Man AI serves as
+- **HelperConnects** and **HelperXpress** are the two businesses Talent Solutions AI serves as
   chief of staff, focused on project management and software engineering.
 - What each one does, for whom and who works on it isn't recorded yet; the app's
   interview questions collect it.
 - Code is on GitHub (`helperconnects` under `mannetsang`; others under
   `talenttsang`, e.g. `talent-solutions-limited/helperxpress`).
-- Man AI's Google account is helperxpresss@gmail.com (Gmail, Calendar, Drive).
+- Talent Solutions AI's Google account is helperxpresss@gmail.com (Gmail, Calendar, Drive).
   It doesn't read team chats.

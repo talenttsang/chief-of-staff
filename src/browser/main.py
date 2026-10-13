@@ -1,4 +1,4 @@
-"""The web browser Man AI operates: a real Chromium on Cloud Run, driven one action at a time.
+"""The web browser Talent Solutions AI operates: a real Chromium on Cloud Run, driven one action at a time.
 
 POST /act  {"session"?, "action", "url"?, "device"?, "target"?, "x"?, "y"?, "text"?, "key"?, "direction"?, "submit"?}
   -> {"session", "url", "title", "image" (base64 JPEG of what's on screen), "elements" (what can be clicked or
@@ -9,7 +9,7 @@ screenshot), type (into a field, optionally pressing Enter), press (a key), sele
 scroll (up or down), back, forward, reload, screenshot, close.
 
 Sessions live in this instance's memory (the service runs one instance at most), are closed after IDLE_SECONDS
-without use, and the oldest is closed when more than MAX_SESSIONS are open. Cloud Run IAM lets only Man AI's service
+without use, and the oldest is closed when more than MAX_SESSIONS are open. Cloud Run IAM lets only Talent Solutions AI's service
 account call this service, and this service's own account has no permissions.
 
 Guards that hold whatever the caller asks (so no web page can talk the model past them):

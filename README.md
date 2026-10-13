@@ -1,4 +1,4 @@
-# Man AI
+# Talent Solutions AI
 
 Chief of staff for **HelperConnects** and **HelperXpress**. It keeps a project
 board, learns every project through an interview and conversation, follows the
@@ -23,9 +23,9 @@ Browser ──shared password──►  chat · board · projects · questions �
 
 ## What each hourly run does
 
-It works up to `WORK_PER_RUN` (3) of Man AI's own open tasks that it hasn't
+It works up to `WORK_PER_RUN` (3) of Talent Solutions AI's own open tasks that it hasn't
 worked on in the last six hours, then re-checks every connected system so the
-Access tab stays true. **Run now** starts a run at once. Man AI doesn't read
+Access tab stays true. **Run now** starts a run at once. Talent Solutions AI doesn't read
 team chats.
 
 ## Security

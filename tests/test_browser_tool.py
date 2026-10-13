@@ -1,4 +1,4 @@
-"""Man AI's browser tool: calls to the browser service, and screenshots reaching each model."""
+"""Talent Solutions AI's browser tool: calls to the browser service, and screenshots reaching each model."""
 
 import copy
 import os
