@@ -1002,7 +1002,7 @@ class CloudSetupTests(unittest.TestCase):
             self.existing, self.policies, self.calls = set(existing), {}, []
             for name in granted:
                 self.policies[name] = {"bindings": [{"role": "roles/secretmanager.secretAccessor",
-                                                     "members": ["serviceAccount:chat-assistant@shp-ai-bot-2026.iam.gserviceaccount.com"]}]}
+                                                     "members": ["serviceAccount:chat-assistant@helperexpress-hk.iam.gserviceaccount.com"]}]}
 
         def request(self, method, url, headers=None, timeout=None, params=None, json=None):
             from types import SimpleNamespace as NS
@@ -1044,7 +1044,7 @@ class CloudSetupTests(unittest.TestCase):
         self.assertEqual(roles, {"roles/secretmanager.secretAccessor"})  # a stored key is only read
         self.assertIn("searchconsole.googleapis.com", report["enabled"])
         self.assertFalse(any(":setIamPolicy" in c[1] and "AIRTABLE" in c[1] for c in cloud.calls))  # nothing to change
-        self.assertFalse(any("projects/shp-ai-bot-2026:setIamPolicy" in c[1] for c in cloud.calls))  # never project-wide
+        self.assertFalse(any("projects/helperexpress-hk:setIamPolicy" in c[1] for c in cloud.calls))  # never project-wide
 
 
     def test_setup_uses_the_secrets_project(self):
@@ -1057,7 +1057,7 @@ class CloudSetupTests(unittest.TestCase):
         secret_calls = [c[1] for c in cloud.calls if "/secrets" in c[1]]
         self.assertTrue(secret_calls)
         self.assertTrue(all(c.startswith("projects/other-secrets/secrets") for c in secret_calls))
-        self.assertTrue(any(c[1].startswith("projects/shp-ai-bot-2026/services") for c in cloud.calls))  # APIs stay put
+        self.assertTrue(any(c[1].startswith("projects/helperexpress-hk/services") for c in cloud.calls))  # APIs stay put
 
     def test_logins_are_used_on_the_server_only(self):
         import integrations

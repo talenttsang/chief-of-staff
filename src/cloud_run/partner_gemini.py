@@ -11,7 +11,7 @@ import requests
 
 from tools import to_gemini_schema
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "us-central1")
 TALK_MODEL = os.environ.get("TALK_MODEL", os.environ.get("GEMINI_MODEL", "gemini-2.5-pro"))
 VISION_MODEL = os.environ.get("VISION_MODEL", "gemini-2.5-flash")  # describes screenshots on live calls

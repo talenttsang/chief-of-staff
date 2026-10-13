@@ -19,7 +19,7 @@ import re
 import threading
 from collections import OrderedDict
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
 GEMINI_TTS_MODEL = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-tts")
 GEMINI_TTS_LOCATION = os.environ.get("GEMINI_TTS_LOCATION", "global")
 OPENAI_TTS_MODEL = os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")

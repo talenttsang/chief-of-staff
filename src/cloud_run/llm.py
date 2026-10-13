@@ -11,7 +11,7 @@ import os
 
 import requests
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "us-central1")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
 

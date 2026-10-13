@@ -71,17 +71,17 @@ sent or held, is logged with the message it answers and the reason.
 
 ## One-time setup
 
-Console steps, all on project `shp-ai-bot-2026`:
+Console steps, all on project `helperexpress-hk`:
 
 1. **Google Chat API → Configuration**
-   (<https://console.cloud.google.com/apis/api/chat.googleapis.com/hangouts-chat?project=shp-ai-bot-2026>):
+   (<https://console.cloud.google.com/apis/api/chat.googleapis.com/hangouts-chat?project=helperexpress-hk>):
    app name, avatar URL, description; interactive features **off**. Save.
 2. **OAuth consent screen**: audience **Internal**. External apps in Testing
    mode lose their sign-in after 7 days.
 3. **Credentials → Create credentials → OAuth client ID → Web application.**
    Authorized redirect URIs, add both:
-   - `https://chat-assistant-onvg62bzra-uc.a.run.app/oauth/callback`
-   - `https://chat-assistant-304363458561.us-central1.run.app/oauth/callback`
+   - `https://chat-assistant-f2n7veewpa-uc.a.run.app/oauth/callback`
+   - `https://chat-assistant-943501248136.us-central1.run.app/oauth/callback`
 
    Download the JSON.
 4. **Secret Manager → Create secret** named `chat-assistant-oauth-client`,
@@ -101,7 +101,8 @@ If the workflow warns it couldn't grant `roles/datastore.user` or
 | Env var | Default |
 |---|---|
 | `OWNER_EMAIL` | `manne@superhairpieces.com` |
-| `GCP_PROJECT` | `shp-ai-bot-2026` (Firestore, Vertex AI) |
+| `GCP_PROJECT` | `helperexpress-hk` (Firestore, Vertex AI) |
+| `FIRESTORE_DATABASE` | `(default)` (the live app uses `man-ai`) |
 | `SECRETS_PROJECT` | `helperexpress-hk` (where every secret is read and written) |
 | `GEMINI_MODEL` | `gemini-2.5-pro` |
 | `TIME_ZONE` | `America/Toronto` |

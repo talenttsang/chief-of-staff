@@ -20,7 +20,8 @@ import threading
 import time
 from datetime import datetime, timezone
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
+FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
 # Secrets live in a different project (talenttsang's) from Firestore and Vertex AI.
 SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT", "helperexpress-hk")
 if SECRETS_PROJECT == "shp-ai-bot-2026":  # never mannetsang's Secret Manager
@@ -230,7 +231,7 @@ class FirestoreStore(MemoryStore):
         from google.cloud import firestore
 
         self._fs = firestore
-        self._db = firestore.Client(project=GCP_PROJECT)
+        self._db = firestore.Client(project=GCP_PROJECT, database=FIRESTORE_DATABASE)
 
     def _get(self, coll, doc_id):
         snap = self._db.collection(coll).document(doc_id).get()

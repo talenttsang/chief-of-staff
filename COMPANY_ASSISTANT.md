@@ -68,7 +68,7 @@ shows a banner, and one **Reconnect** adds it.
 | Partner | How it's called | Setup |
 |---|---|---|
 | Assistant | Gemini (`TALK_MODEL`, default `gemini-2.5-pro`) on Vertex AI | none |
-| Claude | Claude Opus 5.5 (`claude-opus-5-5`) via the Anthropic SDK, with automatic refusal fallback to Claude Opus 4.8. Tries the Claude API with the `ANTHROPIC_API_KEY` secret first, then Vertex AI | Either: credit on the Anthropic account behind `ANTHROPIC_API_KEY` plus Secret Accessor on it for the app's service account, or Claude quota on Vertex AI for `shp-ai-bot-2026` (IAM & Admin > Quotas, `global_online_prediction_requests_per_base_model`, base model `anthropic-claude-opus`) |
+| Claude | Claude Opus 5.5 (`claude-opus-5-5`) via the Anthropic SDK, with automatic refusal fallback to Claude Opus 4.8. Tries the Claude API with the `ANTHROPIC_API_KEY` secret first, then Vertex AI | Either: credit on the Anthropic account behind `ANTHROPIC_API_KEY` plus Secret Accessor on it for the app's service account, or Claude quota on Vertex AI for `helperexpress-hk` (IAM & Admin > Quotas, `global_online_prediction_requests_per_base_model`, base model `anthropic-claude-opus`) |
 | ChatGPT | OpenAI SDK, model from Settings (default `gpt-5`) | Re-run `setup.sh` so the app can read the `CHATGPT_API_KEY` secret |
 
 The Assistant can consult either partner (`consult_partner`), for example for a
@@ -192,7 +192,7 @@ Claude inside it); on a live call Gemini Flash describes the screenshot instead.
 
 The browser is its own Cloud Run service, `web-browser` (`src/browser/`): Playwright's Chromium, one instance at
 most (the open tabs live in its memory, closed after 10 idle minutes; at most 4), scaled to zero when unused.
-It runs as `web-browser@shp-ai-bot-2026.iam.gserviceaccount.com`, which holds **no** roles, and only Man AI's
+It runs as `web-browser@helperexpress-hk.iam.gserviceaccount.com`, which holds **no** roles, and only Man AI's
 service account may call it (Cloud Run IAM; Man AI sends an ID token). Man AI finds it through `BROWSER_URL`;
 without it the tool isn't offered.
 
@@ -214,8 +214,8 @@ OK; that rule is an instruction, not a technical block (Manne accepted this risk
 
 Deploy (once the `web-browser` service account exists):
 
-    gcloud run deploy web-browser --source src/browser --region us-central1 --project shp-ai-bot-2026 --service-account web-browser@shp-ai-bot-2026.iam.gserviceaccount.com --no-allow-unauthenticated --memory 2Gi --cpu 2 --concurrency 8 --max-instances 1 --timeout 120
-    gcloud run services add-iam-policy-binding web-browser --region us-central1 --project shp-ai-bot-2026 --member serviceAccount:chat-assistant@shp-ai-bot-2026.iam.gserviceaccount.com --role roles/run.invoker
+    gcloud run deploy web-browser --source src/browser --region us-central1 --project helperexpress-hk --service-account web-browser@helperexpress-hk.iam.gserviceaccount.com --no-allow-unauthenticated --memory 2Gi --cpu 2 --concurrency 8 --max-instances 1 --timeout 120
+    gcloud run services add-iam-policy-binding web-browser --region us-central1 --project helperexpress-hk --member serviceAccount:chat-assistant@helperexpress-hk.iam.gserviceaccount.com --role roles/run.invoker
 
 then deploy Man AI with `BROWSER_URL=<the web-browser URL>` added to `--set-env-vars`.
 

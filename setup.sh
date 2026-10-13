@@ -6,14 +6,14 @@
 # grants, give it the secrets, let claude-sessions deploy as it, and create the hourly job.
 # Nothing here prints a secret.
 set -euo pipefail
-PROJECT=shp-ai-bot-2026
-# Where the app's secrets live (talenttsang's project), separate from Firestore and Vertex AI.
-SECRETS_PROJECT=${SECRETS_PROJECT:-helperexpress-hk}
-[ "$SECRETS_PROJECT" != "$PROJECT" ] || { echo "SECRETS_PROJECT must not be $PROJECT" >&2; exit 1; }
+PROJECT=helperexpress-hk
+# Where the app's secrets live; never mannetsang's shp-ai-bot-2026.
+SECRETS_PROJECT=${SECRETS_PROJECT:-$PROJECT}
+[ "$SECRETS_PROJECT" != shp-ai-bot-2026 ] || { echo "SECRETS_PROJECT must not be shp-ai-bot-2026" >&2; exit 1; }
 REGION=us-central1
 SA=chat-assistant@$PROJECT.iam.gserviceaccount.com
 DEPLOYER=claude-sessions@$PROJECT.iam.gserviceaccount.com
-URL=https://chat-assistant-onvg62bzra-uc.a.run.app
+URL=https://chat-assistant-f2n7veewpa-uc.a.run.app
 
 gcloud services enable chat.googleapis.com people.googleapis.com calendar-json.googleapis.com \
   aiplatform.googleapis.com firestore.googleapis.com cloudscheduler.googleapis.com --project $PROJECT

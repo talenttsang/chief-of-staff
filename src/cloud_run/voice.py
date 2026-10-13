@@ -29,7 +29,7 @@ import os
 from store import utcnow_iso
 from tools import to_gemini_schema
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
 LIVE_LOCATION = os.environ.get("LIVE_LOCATION", "us-central1")
 LIVE_MODEL = os.environ.get("LIVE_MODEL", "gemini-3.8-live")
 LIVE_VOICE = os.environ.get("LIVE_VOICE", "")  # empty = the model's default voice

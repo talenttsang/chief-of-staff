@@ -17,7 +17,7 @@ on CLAUDE_FALLBACK_MODEL (client-side middleware on Vertex, server-side
 import json
 import os
 
-GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
 CLAUDE_BACKEND = os.environ.get("CLAUDE_BACKEND", "auto")  # auto | vertex | anthropic
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
 CLAUDE_FALLBACK_MODEL = os.environ.get("CLAUDE_FALLBACK_MODEL", "claude-opus-4-8")
