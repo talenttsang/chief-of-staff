@@ -275,6 +275,10 @@ def _locate(page, target, field=False, dropdown=False):
     candidates += [page.get_by_role("button", name=target), page.get_by_role("link", name=target),
                    page.get_by_label(target), page.get_by_placeholder(target), page.get_by_role("option", name=target),
                    page.get_by_text(target, exact=True), page.get_by_text(target)]
+    name, _, shown = target.partition(":")
+    if shown and not (field or dropdown):  # an elements name, "Label: what it shows": the control after the label
+        label = page.locator("label", has_text=name.strip().rstrip("*").strip())
+        candidates += [label.locator(DROPDOWNS), label.locator(FIELDS)]
     for loc in candidates:
         try:
             count = loc.count()
@@ -285,6 +289,18 @@ def _locate(page, target, field=False, dropdown=False):
             if item.is_visible():
                 return item
     return None
+
+
+def _close_menu(page, element):
+    """Close a dropdown left open: Escape, or a click where its button is (on the backdrop, if it has one)."""
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(200)
+    if page.locator("[role=listbox]:visible").count():
+        try:
+            element.click(force=True, timeout=3000)
+        except Exception:  # noqa: BLE001 - the screenshot shows what's left
+            pass
+        page.wait_for_timeout(200)
 
 
 def _check_field(handle_or_locator):
@@ -348,7 +364,13 @@ def act(body):
             if element is None:
                 return {"error": f"Nothing visible matches '{body.get('target')}'. Use a label from elements, or x,y.",
                         **_snapshot(sid, session)}
-            element.click()
+            try:
+                element.click(timeout=5000)
+            except Exception as exc:  # noqa: BLE001 - usually something on top of it
+                if "Timeout" not in type(exc).__name__:
+                    raise
+                return {"error": "Something covers that element (an open menu or pop-up?): close it first, e.g. press "
+                                 "Escape or click outside it, then try again.", **_snapshot(sid, session)}
         page.wait_for_timeout(600)
         notes += _follow_new_tab(session, before)
     elif action == "type":
@@ -407,18 +429,25 @@ def act(body):
         choice = str(body.get("text") or "")
         if element.evaluate("(el) => el.tagName === 'SELECT'"):
             element.select_option(label=choice)
-        else:  # the app's own dropdown: open it, then click the option
-            element.click()
-            page.wait_for_timeout(300)
-            option = None
-            for loc in (page.get_by_role("option", name=choice, exact=True),
-                        page.locator("[role=listbox]").get_by_text(choice, exact=True), page.get_by_text(choice, exact=True)):
-                visible = [loc.nth(i) for i in range(min(loc.count(), 5)) if loc.nth(i).is_visible()]
-                if visible:
-                    option = visible[0]
-                    break
+        else:  # the app's own dropdown: open it (unless it's open already), then click the option
+            def find_option():
+                for loc in (page.get_by_role("option", name=choice, exact=True),
+                            page.locator("[role=listbox]").get_by_text(choice, exact=True)):
+                    visible = [loc.nth(i) for i in range(min(loc.count(), 5)) if loc.nth(i).is_visible()]
+                    if visible:
+                        return visible[0]
+                return None
+
+            option = find_option()
             if option is None:
-                return {"error": f"The dropdown opened but has no option '{choice}'; see the screenshot.",
+                element.click()
+                page.wait_for_timeout(300)
+                option = find_option()
+            if option is None:
+                shown = page.evaluate("""() => [...document.querySelectorAll('[role=listbox] *, [role=option]')]
+                    .filter((e) => !e.children.length && e.offsetParent).map((e) => e.innerText.trim()).filter(Boolean)""")
+                _close_menu(page, element)  # an open menu would cover the page for every later click
+                return {"error": f"No option '{choice}'. The options are: {', '.join(shown[:40]) or 'none visible'}.",
                         **_snapshot(sid, session)}
             option.click()
             page.wait_for_timeout(300)

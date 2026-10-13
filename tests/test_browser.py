@@ -33,11 +33,12 @@ PAGES = {
       <div class="field"><label>Date of birth *</label><input class="input" data-form="dob" type="date" /></div>
       <div class="field"><label>Full name</label><input class="input" data-form="name" type="text" /></div>
       <div class="field"><label>Brother or sister</label><div class="cselect">
-        <button type="button" id="sib" aria-haspopup="listbox" onclick="document.getElementById('menu').hidden=false">
+        <button type="button" id="sib" aria-haspopup="listbox" onclick="menu.hidden=backdrop.hidden=false">
           <span>Select…</span></button>
-        <div id="menu" role="listbox" hidden>
-          <button type="button" onclick="sib.firstElementChild.textContent='Brother';menu.hidden=true">Brother</button>
-          <button type="button" onclick="sib.firstElementChild.textContent='Sister';menu.hidden=true">Sister</button>
+        <div id="backdrop" hidden style="position:fixed;inset:0" onclick="menu.hidden=backdrop.hidden=true"></div>
+        <div id="menu" role="listbox" hidden style="position:relative">
+          <button type="button" onclick="sib.firstElementChild.textContent='Brother';menu.hidden=backdrop.hidden=true">Brother</button>
+          <button type="button" onclick="sib.firstElementChild.textContent='Sister';menu.hidden=backdrop.hidden=true">Sister</button>
         </div></div></div>
     </body></html>""",
     "/product": "<html><head><title>Lace wig</title></head><body><h1>Lace wig</h1><p>$199</p></body></html>",
@@ -154,10 +155,16 @@ class BrowserTests(unittest.TestCase):
             "() => [...document.querySelectorAll('input')].map((i) => i.value)")).result(timeout=30)
         self.assertEqual(values, ["1991-03-04", "Test Helper"])
         self.assertIn("Brother or sister: Select…", [e["label"] for e in page["elements"]])
+        opened = self.run_act(session=sid, action="click", target="Brother or sister: Select…")
+        self.assertNotIn("error", opened)
+        self.assertIn("Sister", opened["text"])  # the menu is open
         picked = self.run_act(session=sid, action="select", target="Brother or sister", text="Sister")
         self.assertNotIn("error", picked)
         self.assertIn("Brother or sister: Sister", [e["label"] for e in picked["elements"]])
-        self.assertIn("error", self.run_act(session=sid, action="select", target="Brother or sister", text="Cousin"))
+        missing = self.run_act(session=sid, action="select", target="Brother or sister", text="Cousin")
+        self.assertIn("The options are: Brother, Sister", missing["error"])
+        self.assertNotIn("Brother Sister", missing["text"])  # the menu was closed again, so the page isn't covered
+        self.assertNotIn("error", self.run_act(session=sid, action="click", target="Full name"))
         self.run_act(session=sid, action="close")
 
     def test_new_tab_mobile_and_blocked_requests(self):
