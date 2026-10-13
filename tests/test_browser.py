@@ -29,6 +29,10 @@ PAGES = {
       <button onclick="alert('Hello there')">Alert me</button>
       <div style="height:3000px"></div><p>Bottom of the page</p>
     </body></html>""",
+    "/profile": """<html><head><title>About you</title></head><body>
+      <div class="field"><label>Date of birth *</label><input class="input" data-form="dob" type="date" /></div>
+      <div class="field"><label>Full name</label><input class="input" data-form="name" type="text" /></div>
+    </body></html>""",
     "/product": "<html><head><title>Lace wig</title></head><body><h1>Lace wig</h1><p>$199</p></body></html>",
 }
 
@@ -127,6 +131,22 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(product["title"], "Lace wig")
         self.assertTrue(self.run_act(session=sid, action="close")["closed"])
         self.assertIn("error", self.run_act(session=sid, action="screenshot"))
+
+    def test_fields_with_unlinked_labels_and_date_pickers(self):
+        page = self.run_act(action="open", url=self.base + "/profile")
+        sid = page["session"]
+        fields = {e["kind"]: e for e in page["elements"] if e["kind"].startswith("input")}
+        self.assertEqual(fields["input:date"]["label"], "Date of birth")  # named by the label next to it
+        self.assertNotIn("error", self.run_act(session=sid, action="type", target="Date of birth", text="1990-01-02"))
+        name = fields["input:text"]
+        self.assertNotIn("error", self.run_act(session=sid, action="type", x=name["x"], y=name["y"], text="Test Helper"))
+        date = fields["input:date"]
+        self.run_act(session=sid, action="type", target="Date of birth", text="")
+        self.assertNotIn("error", self.run_act(session=sid, action="type", x=date["x"], y=date["y"], text="1991-03-04"))
+        values = browser._pool.submit(lambda: browser._sessions[sid].page.evaluate(
+            "() => [...document.querySelectorAll('input')].map((i) => i.value)")).result(timeout=30)
+        self.assertEqual(values, ["1991-03-04", "Test Helper"])
+        self.run_act(session=sid, action="close")
 
     def test_new_tab_mobile_and_blocked_requests(self):
         page = self.run_act(action="open", url=self.base + "/", device="mobile")

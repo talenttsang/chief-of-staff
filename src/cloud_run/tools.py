@@ -24,7 +24,7 @@ from store import utcnow_iso
 
 MAX_RESULT_CHARS = 12000
 # The arguments a work-log line shows (in this order), when a call has them.
-STEP_ARGS = ("action", "account", "url", "query", "title", "name", "status", "question", "method", "path", "system",
+STEP_ARGS = ("action", "account", "url", "target", "key", "query", "title", "name", "status", "question", "method", "path", "system",
              "partner", "database", "sql", "text")
 # An "answer" that only sets a question aside; such questions are deleted instead of shown as answered.
 NOT_AN_ANSWER = re.compile(r"^\W*(dismiss(ed)?|skip(ped)?|not relevant|irrelevant|n/?a)\b", re.I)
@@ -124,7 +124,8 @@ SPECS = [
      "check how a page looks or works: layout, images, pop-ups, menus, mobile view, search, a product's options, the "
      "steps to checkout, a competitor's site. (read_webpage is quicker when only the text matters.) Start with "
      "action=open and a url (device=mobile for a phone); then click (target = a label from elements, or x,y on the "
-     "screenshot), type (target = the field; submit=true presses Enter), press (key), select (target = the "
+     "screenshot), type (target = the field's label from elements, or x,y of the field; a date field takes "
+     "YYYY-MM-DD; submit=true presses Enter), press (key), select (target = the "
      "dropdown, text = the option), scroll (direction), back, screenshot, close, and sign_in (account = a test "
      "account: " + (", ".join(BROWSER_ACCOUNTS) or "none set up") + "; it opens that app's test sign-in and signs "
      "in, you never see the key) to check signed-in pages, e.g. after a code change. You may type and fill in "

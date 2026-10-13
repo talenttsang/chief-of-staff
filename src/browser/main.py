@@ -176,6 +176,11 @@ ELEMENTS_JS = """(max) => {
     let label = (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') ||
                  el.getAttribute('title') || el.getAttribute('alt') || el.getAttribute('name') || '').trim().replace(/\\s+/g, ' ');
     if (!label && el.querySelector('img[alt]')) label = el.querySelector('img[alt]').getAttribute('alt');
+    if (/^(input|select|textarea)$/.test(tag)) {  // a field's name is its label, linked or just next to it
+      const near = (el.labels && el.labels[0]) || (el.parentElement && el.parentElement.querySelector('label'));
+      const named = near ? near.innerText.trim().replace(/\\s+/g, ' ').replace(/\\s*\\*$/, '') : '';
+      if (named && named !== label) label = label ? named + ': ' + label : named;
+    }
     const kind = tag === 'input' ? 'input:' + (el.type || 'text') : (el.getAttribute('role') || tag);
     const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
     const key = kind + label + x + y;
@@ -186,6 +191,8 @@ ELEMENTS_JS = """(max) => {
   }
   return out;
 }"""
+
+PICKER_JS = """(el) => el.tagName === 'INPUT' && /^(date|datetime-local|month|week|time|color|range)$/.test(el.type)"""
 
 FIELD_JS = """(el) => [el.type || '', el.name || '', el.id || '', el.getAttribute('autocomplete') || '',
   el.getAttribute('aria-label') || '', el.getAttribute('placeholder') || ''].join(' ')"""
@@ -241,12 +248,22 @@ def _snapshot(sid, session, notes=()):
             "text": text[:TEXT_CHARS] + ("…" if len(text) > TEXT_CHARS else ""), "notes": all_notes}
 
 
-def _locate(page, target):
-    """The element meant by `target`: a CSS selector, or visible text, a label, a placeholder."""
+FIELDS = "xpath=following::*[self::input[not(@type='hidden')] or self::select or self::textarea][1]"
+
+
+def _locate(page, target, field=False):
+    """The element meant by `target`: a CSS selector, or visible text, a label, a placeholder.
+
+    field=True (typing) looks for a form field first, including one whose label isn't linked to it (a <label>
+    just before the field, as many apps write them)."""
     target = target.strip()
     candidates = []
     if re.match(r"^[#.\[]|^[a-z]+[#.\[:]|>", target):
         candidates.append(page.locator(target))
+    if field:
+        name = target.split(":")[0].strip()  # an elements label: "Date of birth: 1990-01-01"
+        candidates += [page.get_by_label(target), page.get_by_label(name), page.get_by_placeholder(target),
+                       page.locator("label", has_text=name).locator(FIELDS)]
     candidates += [page.get_by_role("button", name=target), page.get_by_role("link", name=target),
                    page.get_by_label(target), page.get_by_placeholder(target), page.get_by_role("option", name=target),
                    page.get_by_text(target, exact=True), page.get_by_text(target)]
@@ -329,15 +346,23 @@ def act(body):
     elif action == "type":
         text = str(body.get("text") or "")
         if body.get("target"):
-            element = _locate(page, str(body["target"]))
+            element = _locate(page, str(body["target"]), field=True)
             if element is None:
-                return {"error": f"No field matches '{body['target']}'.", **_snapshot(sid, session)}
+                return {"error": f"No field matches '{body['target']}'. Use its label from elements, or x,y.",
+                        **_snapshot(sid, session)}
             _check_field(element)
             element.fill(text)
         else:
-            focused = page.evaluate_handle("() => document.activeElement")
+            if body.get("x") is not None and body.get("y") is not None:
+                page.mouse.click(float(body["x"]), float(body["y"]))
+            focused = page.evaluate_handle("() => document.activeElement").as_element()
+            if focused is None:
+                return {"error": "No field is selected: give target, or x,y of the field.", **_snapshot(sid, session)}
             _check_field(focused)
-            page.keyboard.type(text, delay=20)
+            if focused.evaluate(PICKER_JS):  # date, time, colour...: keys don't fill these, fill() does
+                focused.fill(text)
+            else:
+                page.keyboard.type(text, delay=20)
         if body.get("submit"):
             page.keyboard.press("Enter")
             page.wait_for_timeout(800)
