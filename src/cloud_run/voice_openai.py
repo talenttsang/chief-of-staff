@@ -20,6 +20,7 @@ import os
 from array import array
 
 from voice import CONNECT_TIMEOUT, VoiceBridge
+from zh import to_hk
 
 OPENAI_LIVE_MODEL = os.environ.get("OPENAI_LIVE_MODEL", "gpt-realtime-2.1")
 OPENAI_LIVE_VOICE = os.environ.get("OPENAI_LIVE_VOICE", "")  # empty = the model's default voice
@@ -121,7 +122,7 @@ class RealtimeVoiceBridge(VoiceBridge):
         self.upsample = Upsampler()
 
     async def _run(self):
-        self.send_json(type="status", text=f"Connecting to {self.label}…")
+        self.send_json(type="status", text=f"正在連接 {self.label}…")
         manager = self.connect()
         try:
             conn = await asyncio.wait_for(manager.__aenter__(), timeout=CONNECT_TIMEOUT)
@@ -177,10 +178,11 @@ class RealtimeVoiceBridge(VoiceBridge):
             if kind == "response.output_audio.delta":
                 self.send_audio(base64.b64decode(event.delta))
             elif kind == "response.output_audio_transcript.delta":
-                self.turn["assistant"].append(event.delta)
-                self.send_json(type="transcript", who="assistant", text=event.delta)
+                text = to_hk(event.delta)
+                self.turn["assistant"].append(text)
+                self.send_json(type="transcript", who="assistant", text=text)
             elif kind == "conversation.item.input_audio_transcription.completed":
-                text = (event.transcript or "").strip()
+                text = to_hk((event.transcript or "").strip())  # recognition writes Simplified Chinese
                 if text:
                     self.turn["you"].append(text + " ")
                     self.send_json(type="transcript", who="you", text=text + " ")

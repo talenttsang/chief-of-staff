@@ -21,6 +21,14 @@ from test_assistant import scenario  # noqa: E402
 from tools import SPECS, Toolset, to_gemini_schema  # noqa: E402
 
 
+class TraditionalChineseTests(unittest.TestCase):
+    def test_simplified_text_becomes_traditional_hong_kong(self):
+        from zh import to_hk
+        self.assertEqual(to_hk("你听得懂广东话? 你有只劲狗咩？"), "你聽得懂廣東話? 你有隻勁狗咩？")
+        self.assertEqual(to_hk("Deploy to Cloud Run: https://x.io/a"), "Deploy to Cloud Run: https://x.io/a")
+        self.assertEqual(to_hk(""), "")
+
+
 class KnowledgeTests(unittest.TestCase):
     def test_seeding_happens_once(self):
         store = MemoryStore()
@@ -933,7 +941,7 @@ class RobustnessTests(unittest.TestCase):
         with mock.patch.object(voice, "CONNECT_TIMEOUT", 0.3):
             voice.VoiceBridge(ws, MemoryStore(), Toolset(MemoryStore(), None), "s", connect=lambda c: Hang()).run()
         frames = [json.loads(f) for f in ws.sent]
-        self.assertEqual(frames[0], {"type": "status", "text": "Connecting to Gemini Live…"})
+        self.assertEqual(frames[0], {"type": "status", "text": "正在連接 Gemini Live…"})
         self.assertEqual(frames[-1]["type"], "error")
         self.assertIn("didn't answer", frames[-1]["message"])
 
@@ -1155,7 +1163,7 @@ class WebTests(unittest.TestCase):
         session = FakeLiveSession(call=("ask_claude", {"message": "What should we tackle first?"}))
         with mock.patch.object(self.main, "CLAUDE_VOICE", "gemini"):  # Claude's call on Gemini's voice line
             frames, config = self._voice_call("claude", session, [b"\x00\x00" * 640, 0.3])
-        self.assertIn({"type": "status", "text": "Preparing Claude…"}, frames)
+        self.assertIn({"type": "status", "text": "正在準備 Claude…"}, frames)
         self.assertIn({"type": "tool", "name": "ask_claude"}, frames)
         self.assertEqual([d.name for d in config.tools[0].function_declarations], ["ask_claude"])
         self.assertEqual(session.tool_responses[0].response, {"answer": "claude here"})
@@ -1180,7 +1188,7 @@ class WebTests(unittest.TestCase):
         with mock.patch.dict(self.main.app.config, {"OPENAI_VOICE_CONNECT": FakeRealtimeConnect(conn)}):
             frames, gemini_config = self._voice_call("chatgpt", FakeLiveSession(), [b"\x00\x00" * 640] * 2 + [0.3])
         self.assertIsNone(gemini_config)                       # Gemini isn't on this call at all
-        self.assertIn({"type": "status", "text": "Connecting to ChatGPT…"}, frames)
+        self.assertIn({"type": "status", "text": "正在連接 ChatGPT…"}, frames)
         self.assertIn({"type": "ready", "model": "gpt-realtime-2.1"}, frames)
         self.assertIn("ChatGPT, made by OpenAI", conn.updates[0]["instructions"])
         self.assertEqual(conn.updates[0]["audio"]["output"]["voice"], "marin")  # the voice replies are read in
@@ -1194,7 +1202,7 @@ class WebTests(unittest.TestCase):
         with mock.patch.dict(self.main.app.config, {"OPENAI_VOICE_CONNECT": FakeRealtimeConnect(conn)}):
             frames, gemini_config = self._voice_call("claude", FakeLiveSession(), [b"\x00\x00" * 640] * 2 + [0.3])
         self.assertIsNone(gemini_config)
-        self.assertIn({"type": "status", "text": "Connecting to Claude…"}, frames)
+        self.assertIn({"type": "status", "text": "正在連接 Claude…"}, frames)
         self.assertIn({"type": "ready", "model": "Claude, voice by gpt-realtime-2.1"}, frames)
         session = conn.updates[0]
         self.assertEqual([t["name"] for t in session["tools"]], ["ask_claude"])   # it can only pass words on

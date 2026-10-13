@@ -44,6 +44,7 @@ from google_apis import (ASSISTANT_SCOPES, IDENTITY_SCOPES, GoogleClient, creden
 from store import AUTONOMY_CATEGORIES, make_secrets, make_store, utcnow_iso
 from talk import PARTNERS, Talk
 from tools import NOT_AN_ANSWER
+from zh import to_hk
 
 # Google may grant scopes in a different spelling/order than requested.
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
@@ -494,7 +495,7 @@ def api_answer_question(question_id):
     knowledge.add_fact(store, f"Q: {q['question']} A: {answer}", "general", q.get("project_id", ""), "owner's answer")
     try:
         digest = talk_service().digest_answer(q, answer)
-        note = digest["text"]
+        note = to_hk(digest["text"])
         tools = digest.get("tools", [])
     except Exception as exc:  # noqa: BLE001 - the answer is saved either way
         note, tools = f"Saved your answer, but couldn't process it further: {exc}", []
@@ -694,7 +695,7 @@ def voice_ws(ws):
         return
     try:
         label = PARTNERS[partner].LABEL if partner != "assistant" else "your assistant"
-        ws.send(_json.dumps({"type": "status", "text": f"Preparing {label}…"}))
+        ws.send(_json.dumps({"type": "status", "text": f"正在準備 {label}…"}))
         service = talk_service()
         ok, why = service.partner_status(partner)
         if not ok:

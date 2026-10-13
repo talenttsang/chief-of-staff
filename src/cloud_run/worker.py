@@ -16,6 +16,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from store import utcnow_iso
+from zh import to_hk
 
 OWNER = "Assistant"
 WORK_PER_RUN = int(os.environ.get("WORK_PER_RUN", "3"))   # tasks the hourly run works, at most
@@ -106,7 +107,7 @@ def work_on(service, store, task_id, partner="assistant"):
     except Exception as exc:
         store.save_task(task_id, {"working_since": "", "work_error": str(exc)[:300], "worked_at": utcnow_iso()})
         raise
-    report = (result.get("text") or "").strip() or "(no report)"
+    report = to_hk((result.get("text") or "").strip()) or "（沒有報告）"
     tools = result.get("tools", [])
     finished = store.get_task(task_id) or {}
     store.save_task(task_id, {"working_since": "", "work_error": "", "worked_at": utcnow_iso(), "result": report[:6000],

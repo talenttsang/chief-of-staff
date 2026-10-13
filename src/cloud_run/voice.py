@@ -28,6 +28,7 @@ import os
 
 from store import utcnow_iso
 from tools import to_gemini_schema
+from zh import to_hk
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
 LIVE_LOCATION = os.environ.get("LIVE_LOCATION", "us-central1")
@@ -168,7 +169,7 @@ class VoiceBridge:
 
     async def _run(self):
         config = live_config(self.system_instruction, self.toolset.specs(), self.end_silence_ms, self.voice)
-        self.send_json(type="status", text="Connecting to Gemini Live…")
+        self.send_json(type="status", text="正在連接 Gemini Live…")
         manager = self.connect(config)
         try:
             session = await asyncio.wait_for(manager.__aenter__(), timeout=CONNECT_TIMEOUT)
@@ -239,11 +240,13 @@ class VoiceBridge:
                         if part.inline_data and part.inline_data.data:
                             self.send_audio(part.inline_data.data)
                 if content.input_transcription and content.input_transcription.text:
-                    self.turn["you"].append(content.input_transcription.text)
-                    self.send_json(type="transcript", who="you", text=content.input_transcription.text)
+                    text = to_hk(content.input_transcription.text)  # recognition writes Simplified Chinese
+                    self.turn["you"].append(text)
+                    self.send_json(type="transcript", who="you", text=text)
                 if content.output_transcription and content.output_transcription.text:
-                    self.turn["assistant"].append(content.output_transcription.text)
-                    self.send_json(type="transcript", who="assistant", text=content.output_transcription.text)
+                    text = to_hk(content.output_transcription.text)
+                    self.turn["assistant"].append(text)
+                    self.send_json(type="transcript", who="assistant", text=text)
                 if content.turn_complete:
                     self._save_turn()
                     self.send_json(type="turn_complete")

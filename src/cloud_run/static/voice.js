@@ -80,14 +80,14 @@
         if (msg.who === "assistant") setState("正在說話…");
         this.renderLive();
       } else if (msg.type === "tool") setState(msg.name === `ask_${this.partner}` ? `${this.label} is thinking…` : `Working: ${msg.name.replace(/_/g, " ")}…`);
-      else if (msg.type === "interrupted") { this.stopPlayback(); setState("Listening…"); }
+      else if (msg.type === "interrupted") { this.stopPlayback(); setState("正在聆聽…"); }
       else if (msg.type === "turn_complete") {
         for (const who of ["you", "assistant"]) {
           if (this.live[who].trim()) this.lines.push({ role: who === "you" ? "user" : "assistant", text: this.live[who].trim(), at: new Date().toISOString(), voice: true });
           this.live[who] = "";
         }
         this.renderLive();
-        setState("Listening…");
+        setState("正在聆聽…");
         A.refreshKnowledge();
       } else if (msg.type === "error") {
         if (!this.ready) this.fail(msg.message);  // couldn't start: say why and close the bar

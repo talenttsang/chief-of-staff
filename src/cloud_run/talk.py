@@ -14,6 +14,7 @@ import partner_gemini
 import partner_openai
 from store import utcnow_iso
 from tools import Toolset
+from zh import to_hk
 
 PARTNERS = {"assistant": partner_gemini, "claude": partner_claude, "chatgpt": partner_openai}
 TZ = ZoneInfo("America/Toronto")
@@ -145,7 +146,7 @@ class Talk:
                 system_prompt(self.store, partner, consulted=True, owner_email=self.owner_email),
                 [{"role": "user", "text": f"Request from the {caller}: {request}"}],
                 toolset, self.secrets, self._model(partner))
-            return result["text"]
+            return to_hk(result["text"])
         return consult
 
     def toolset(self, partner, voice=False, images=None):
@@ -166,7 +167,7 @@ class Talk:
                                relayed=voice and partner != "assistant")  # ask(voice=True) is the voice relay
         result = PARTNERS[partner].respond(prompt,
                                            history + [user_turn], toolset, self.secrets, self._model(partner))
-        reply = {"role": "assistant", "text": result["text"], "at": utcnow_iso(), "tools": result.get("tools", [])}
+        reply = {"role": "assistant", "text": to_hk(result["text"]), "at": utcnow_iso(), "tools": result.get("tools", [])}
         if voice:
             user_turn["voice"] = reply["voice"] = True
         self.store.append_talk(partner, [user_turn, reply])
