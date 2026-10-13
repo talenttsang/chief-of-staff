@@ -21,8 +21,8 @@ import time
 from datetime import datetime, timezone
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
-# Secrets can live in a different project from Firestore and Vertex AI.
-SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT") or GCP_PROJECT
+# Secrets live in a different project (talenttsang's) from Firestore and Vertex AI.
+SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT", "helperexpress-hk")
 
 # What the assistant may do without asking, per category ("auto" or "ask").
 # "Tiered" autonomy: internal work runs on its own; anything that reaches

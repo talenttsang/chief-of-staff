@@ -102,7 +102,7 @@ If the workflow warns it couldn't grant `roles/datastore.user` or
 |---|---|
 | `OWNER_EMAIL` | `manne@superhairpieces.com` |
 | `GCP_PROJECT` | `shp-ai-bot-2026` (Firestore, Vertex AI) |
-| `SECRETS_PROJECT` | `GCP_PROJECT` (where every secret is read and written) |
+| `SECRETS_PROJECT` | `helperexpress-hk` (where every secret is read and written) |
 | `GEMINI_MODEL` | `gemini-2.5-pro` |
 | `TIME_ZONE` | `America/Toronto` |
 | `INITIAL_LOOKBACK_HOURS` | `24` |
