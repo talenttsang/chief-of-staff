@@ -34,6 +34,8 @@ def make_client():
     from google.cloud import secretmanager
 
     project = os.environ.get("SECRETS_PROJECT", "helperexpress-hk")
+    if project == "shp-ai-bot-2026":  # never mannetsang's Secret Manager
+        raise Stop("SECRETS_PROJECT must not be shp-ai-bot-2026.")
     name = f"projects/{project}/secrets/{TOKEN_SECRET}/versions/latest"
     token = secretmanager.SecretManagerServiceClient().access_secret_version(name=name).payload.data.decode()
     return GoogleClient(credentials_from_json(token))

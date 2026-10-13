@@ -9,6 +9,7 @@ set -euo pipefail
 PROJECT=shp-ai-bot-2026
 # Where the app's secrets live (talenttsang's project), separate from Firestore and Vertex AI.
 SECRETS_PROJECT=${SECRETS_PROJECT:-helperexpress-hk}
+[ "$SECRETS_PROJECT" != "$PROJECT" ] || { echo "SECRETS_PROJECT must not be $PROJECT" >&2; exit 1; }
 REGION=us-central1
 SA=chat-assistant@$PROJECT.iam.gserviceaccount.com
 DEPLOYER=claude-sessions@$PROJECT.iam.gserviceaccount.com

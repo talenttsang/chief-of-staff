@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
 # Secrets live in a different project (talenttsang's) from Firestore and Vertex AI.
 SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT", "helperexpress-hk")
+if SECRETS_PROJECT == "shp-ai-bot-2026":  # never mannetsang's Secret Manager
+    raise RuntimeError("SECRETS_PROJECT must not be shp-ai-bot-2026")
 
 # What the assistant may do without asking, per category ("auto" or "ask").
 # "Tiered" autonomy: internal work runs on its own; anything that reaches
