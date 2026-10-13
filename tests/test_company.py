@@ -22,6 +22,16 @@ from tools import SPECS, Toolset, to_gemini_schema  # noqa: E402
 
 
 class TraditionalChineseTests(unittest.TestCase):
+    def test_every_voice_line_is_told_to_speak_cantonese(self):
+        import voice
+        import voice_openai
+        store = MemoryStore()
+        knowledge.ensure_seeded(store)
+        for partner in ("assistant", "claude", "chatgpt"):
+            self.assertIn("廣東話", talk.system_prompt(store, partner, voice=True))
+        self.assertIn("廣東話", voice.relay_instruction("Claude", "ask_claude"))
+        self.assertIn("廣東話", voice_openai.SPOKEN_REMINDER)
+
     def test_simplified_text_becomes_traditional_hong_kong(self):
         from zh import to_hk
         self.assertEqual(to_hk("你听得懂广东话? 你有只劲狗咩？"), "你聽得懂廣東話? 你有隻勁狗咩？")

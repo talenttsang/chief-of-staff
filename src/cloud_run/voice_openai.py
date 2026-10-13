@@ -42,8 +42,8 @@ OPENAI_LIVE_REASONING = os.environ.get("OPENAI_LIVE_REASONING", "low")  # minima
 API_KEY_SECRET = os.environ.get("OPENAI_KEY_SECRET", "CHATGPT_API_KEY")
 # Said last, where a long prompt's instructions carry most weight: unprompted, answers ran 26-37 s.
 SPOKEN_REMINDER = """\
-REMEMBER: this is a spoken conversation. Answer in two or three short sentences unless Manne asks for
-more. Don't narrate what you're about to do ("let me think", "let me check"); just do it and say the result.
+REMEMBER: this is a spoken conversation, in Cantonese (廣東話, Hong Kong), never Mandarin, unless Manne
+speaks English. Answer in two or three short sentences unless Manne asks for more. Don't narrate what you're about to do ("let me think", "let me check"); just do it and say the result.
 If there's more, offer it instead of reading it all out."""
 RATE = 24000  # the Realtime API's PCM rate, in and out
 
