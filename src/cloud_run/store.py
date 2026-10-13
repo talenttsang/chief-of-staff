@@ -311,7 +311,7 @@ class SecretManagerSecrets:
     CACHE_SECONDS = 300
     # A missing secret is only remembered briefly: a key pasted in the Access tab lands on whichever instance
     # served the paste, and the others must see it soon (remembering "missing" for 5 minutes left a pasted
-    # BigCommerce token reading as "can't read" after it was saved).
+    # key reading as "can't read" after it was saved).
     MISSING_CACHE_SECONDS = 15
 
     def __init__(self):

@@ -37,7 +37,7 @@ class _Unusable(Exception):
 
 def available(secrets):
     if CLAUDE_BACKEND == "anthropic" and not _key(secrets):
-        return False, f"Secret {API_KEY_SECRET} is missing or not readable"
+        return False, f"{API_KEY_SECRET} 金鑰不存在或無法讀取"
     return True, ""
 
 
@@ -110,7 +110,7 @@ def _create(secrets, **kwargs):
             continue
         _working = backend
         return response
-    raise RuntimeError("Claude can't be reached. " + " ".join(problems))
+    raise RuntimeError("無法連接 Claude。" + " ".join(problems))
 
 
 def _echoable(content):

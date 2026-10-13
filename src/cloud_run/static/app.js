@@ -14,7 +14,6 @@ const SCOPE_LABEL = {
   "calendar.events": "你的日曆",
   "gmail.readonly": "讀取 Gmail", "gmail.compose": "草擬電郵", "drive.readonly": "讀取 Drive",
   "spreadsheets.readonly": "讀取 Sheets", "analytics.readonly": "Analytics", "webmasters.readonly": "Search Console",
-  "content": "Merchant Center",
 };
 const PROJECT_STATUS = { active: "進行中", blocked: "受阻", paused: "暫停", done: "已完成", unknown: "未知" };
 const COMPANY_LABEL = { helperconnects: "HelperConnects", helperxpress: "HelperXpress", both: "兩者" };
@@ -368,11 +367,11 @@ async function checkConnections(retries = 0) {
   try {
     const { results } = await api("POST", "/api/integrations/check");
     const all = Object.values(results), ok = all.filter((r) => r.ok).length;
-    const waiting = all.filter((r) => !r.ok && /can't read/.test(r.detail || "")).length;
+    const waiting = all.filter((r) => !r.ok && /無法讀取/.test(r.detail || "")).length;
     refreshKnowledge();
     // Every system that isn't connected, with what it said, so the reason is on screen (and in a screenshot).
-    const why = (r) => /can't read the (HUBSPOT|REAMAZE)/.test(r.detail || "") ? "等待金鑰：按「連接」並貼上"
-      : /Google isn't connected|insufficient|scope/i.test(r.detail || "") ? "按「連接」把它加入你的 Google 登入"
+    const why = (r) => /無法讀取 \S+ 金鑰/.test(r.detail || "") && /貼上|paste/i.test(r.paste || "") ? "等待金鑰：按「連接」並貼上"
+      : /Google 尚未連接|insufficient|scope/i.test(r.detail || "") ? "按「連接」把它加入你的 Google 登入"
       : (r.detail || "沒有回應").slice(0, 160);
     const failing = all.filter((r) => !r.ok).map((r) => `• ${r.system}: ${why(r)}`);
     if (waiting && retries > 0) {

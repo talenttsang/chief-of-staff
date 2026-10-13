@@ -48,7 +48,7 @@ from tools import NOT_AN_ANSWER
 # Google may grant scopes in a different spelling/order than requested.
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
-OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "manne@superhairpieces.com").lower()
+OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "talenttsang@gmail.com").lower()
 # The Google account Talent Solutions AI reads Gmail, Calendar and Drive as. Connect Google accepts only this one.
 GOOGLE_ACCOUNT = os.environ.get("GOOGLE_ACCOUNT", OWNER_EMAIL).lower()
 PASSWORD_SECRET_ID = os.environ.get("PASSWORD_SECRET_ID", "chat-assistant-password")
@@ -698,7 +698,7 @@ def voice_ws(ws):
         service = talk_service()
         ok, why = service.partner_status(partner)
         if not ok:
-            ws.send(_json.dumps({"type": "error", "message": f"{label} isn't available: {why}"}))
+            ws.send(_json.dumps({"type": "error", "message": f"{label} 暫時無法使用：{why}"}))
             return
 
         def live_instruction():

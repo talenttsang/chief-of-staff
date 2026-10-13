@@ -35,25 +35,25 @@ class KnowledgeTests(unittest.TestCase):
 
     def test_projects_match_by_name_and_facts_dedupe(self):
         store = MemoryStore()
-        p = knowledge.save_project(store, {"name": "Amazon–SkuVault Bridge", "owner": "Manne"})
-        again = knowledge.save_project(store, {"name": "amazon–skuvault bridge", "status": "blocked"})
+        p = knowledge.save_project(store, {"name": "WhatsApp–Supabase Bridge", "owner": "Manne"})
+        again = knowledge.save_project(store, {"name": "whatsapp–supabase bridge", "status": "blocked"})
         self.assertEqual(p["id"], again["id"])
         self.assertEqual((again["owner"], again["status"]), ("Manne", "blocked"))
         self.assertIsNone(knowledge.save_project(store, {"summary": "no name"}))
-        knowledge.add_fact(store, "Kathy runs Dufferin")
-        knowledge.add_fact(store, "Kathy runs Dufferin")
+        knowledge.add_fact(store, "Ana runs helper onboarding")
+        knowledge.add_fact(store, "Ana runs helper onboarding")
         self.assertEqual(len(store.list_items("facts")), 1)
 
     def test_brief_mentions_everything(self):
         store = MemoryStore()
         knowledge.ensure_seeded(store)
-        knowledge.save_project(store, {"name": "FBM Removal", "company": "superhairpieces", "status": "active"})
-        knowledge.add_fact(store, "SkuVault is the source of truth for stock")
+        knowledge.save_project(store, {"name": "Helper Onboarding", "company": "helperxpress", "status": "active"})
+        knowledge.add_fact(store, "Supabase is the source of truth for helpers")
         text = knowledge.brief(store, store.get_settings())
-        for needle in ("FBM Removal", "SkuVault is the source", "OPEN QUESTIONS", "- connected:", "AUTONOMY",
+        for needle in ("Helper Onboarding", "Supabase is the source", "OPEN QUESTIONS", "- connected:", "AUTONOMY",
                        "退款、價格、折扣、廣告預算、付款: ask"):
             self.assertIn(needle, text)
-        self.assertIn("FBM Removal", knowledge.brief(store, compact=True))
+        self.assertIn("Helper Onboarding", knowledge.brief(store, compact=True))
         self.assertIn("HelperXpress", knowledge.company_background())
 
     def test_gemini_schema_conversion(self):
@@ -76,7 +76,7 @@ class ToolTests(unittest.TestCase):
             self.assertEqual(schema["type"], "object")
 
     def test_knowledge_tools_round_trip(self):
-        self.tools.call("save_project", {"name": "EU SEO", "company": "superhairpieces", "goal": "Rank in NL"})
+        self.tools.call("save_project", {"name": "EU SEO", "company": "helperxpress", "goal": "Rank in NL"})
         self.tools.call("record_fact", {"text": "Ryan leads the EU team", "topic": "person"})
         hits = self.tools.call("search_knowledge", {"query": "EU Ryan"})["results"]  # "EU" is a real search term
         self.assertTrue({"projects", "facts"} <= {h["kind"] for h in hits})
@@ -86,8 +86,8 @@ class ToolTests(unittest.TestCase):
         self.assertIn("Ryan", self.tools.call("company_overview", {})["overview"])
 
     def test_irrelevant_questions_can_be_removed_with_their_answers(self):
-        q = self.tools.call("ask_owner", {"question": "Which salon does Kathy run?", "why": "old app"})
-        self.tools.call("answer_question", {"question_id": q["id"], "answer": "Dufferin"})
+        q = self.tools.call("ask_owner", {"question": "Which agency does Ana work with?", "why": "old app"})
+        self.tools.call("answer_question", {"question_id": q["id"], "answer": "Star Agency"})
         keep = knowledge.add_fact(self.store, "HelperXpress launched in 2026")
         result = self.tools.call("delete_question", {"question_id": q["id"]})
         self.assertEqual((result["deleted"], result["answer_facts_removed"]), (True, 1))
@@ -103,10 +103,10 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(any("Dismissed" in f["text"] for f in self.store.list_items("facts")))
 
     def test_the_ai_can_remove_anything_on_the_board_and_it_is_logged(self):
-        p = self.tools.call("save_project", {"name": "Old Salon Launch", "company": "superhairpieces"})["project"]
-        t = self.tools.call("create_task", {"title": "Call the salon", "project_id": p["id"]})["task"]
+        p = self.tools.call("save_project", {"name": "Old Agency Launch", "company": "helperxpress"})["project"]
+        t = self.tools.call("create_task", {"title": "Call the agency", "project_id": p["id"]})["task"]
         keep = self.tools.call("create_task", {"title": "Ship HelperXpress onboarding"})["task"]
-        f = knowledge.add_fact(self.store, "Kathy runs Dufferin")
+        f = knowledge.add_fact(self.store, "Ana runs helper onboarding")
         self.assertEqual(self.tools.call("delete_project", {"project_id": p["id"]})["tasks_unlinked"], 1)
         self.assertEqual(self.store.get_task(t["id"])["project_id"], "")
         self.assertTrue(self.tools.call("delete_task", {"task_id": t["id"]})["deleted"])
@@ -119,18 +119,18 @@ class ToolTests(unittest.TestCase):
         self.assertIsNone(self.store.get_item("facts", f["id"]))
         self.assertIsNone(self.store.get_item("systems", "error_tracking"))
         logged = " | ".join(a["reply_text"] for a in self.store.list_actions())
-        for what in ("Removed task: Call the salon", "Removed project: Old Salon Launch", "Removed fact: Kathy",
+        for what in ("Removed task: Call the agency", "Removed project: Old Agency Launch", "Removed fact: Ana",
                      "Removed Access row"):
             self.assertIn(what, logged)
         self.assertIn("error", self.tools.call("delete_task", {"task_id": "nope"}))
 
     def test_tasks_systems_status_autopilot(self):
-        t = self.tools.call("create_task", {"title": "Call SkuVault", "priority": "high"})["task"]
+        t = self.tools.call("create_task", {"title": "Call Supabase support", "priority": "high"})["task"]
         self.tools.call("update_task", {"task_id": t["id"], "status": "done"})
         self.assertEqual(self.store.get_task(t["id"])["status"], "done")
         self.tools.call("request_access", {"system": "hosting", "why": "deploy logs"})
         self.assertEqual(self.store.get_item("systems", "hosting")["status"], "requested")
-        self.tools.call("request_access", {"system": "Shopify", "why": "Gen'C store"})
+        self.tools.call("request_access", {"system": "Shopify", "why": "Agency CRM"})
         self.assertTrue(any(s["name"] == "Shopify" for s in self.store.list_items("systems")))
         self.assertIn("note", self.tools.call("request_access", {"system": "google_calendar", "why": "x"}))
         self.tools.call("set_autopilot", {"on": False})
@@ -175,7 +175,7 @@ class TalkTests(unittest.TestCase):
         patcher = mock.patch.dict(talk.PARTNERS, self.fake)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.service = talk.Talk(self.store, MemorySecrets(), lambda: None, "manne@superhairpieces.com")
+        self.service = talk.Talk(self.store, MemorySecrets(), lambda: None, "talenttsang@gmail.com")
 
     def test_each_partner_gets_its_role_context_and_tools(self):
         for name in talk.PARTNERS:
@@ -208,7 +208,7 @@ class TalkTests(unittest.TestCase):
         self.store.update_settings({"partners_enabled": False})
         with self.assertRaises(RuntimeError):
             self.service.ask("chatgpt", "hi")
-        self.assertIn("isn't available", self.service.consult_fn("assistant")("claude", "x"))
+        self.assertIn("暫時無法使用", self.service.consult_fn("assistant")("claude", "x"))
         self.service.ask("assistant", "still works")
 
     def test_partner_test_keeps_their_access_rows_true(self):
@@ -235,7 +235,7 @@ class TalkTests(unittest.TestCase):
         self.assertEqual(self.store.get_item("systems", "claude")["status"], "not_used")
 
     def test_digest_answer_uses_the_assistant_with_tools(self):
-        self.fake["assistant"].tool = ("save_project", {"name": "Evolve Academy", "company": "superhairpieces"})
+        self.fake["assistant"].tool = ("save_project", {"name": "Evolve Academy", "company": "helperxpress"})
         q = self.store.list_items("questions")[0]
         result = self.service.digest_answer(q, "Evolve Academy trains Tier 1 stylists")
         self.assertIsNotNone(knowledge.find_project(self.store, "Evolve Academy"))
@@ -420,7 +420,7 @@ class RealtimeVoiceTests(unittest.TestCase):
         store, conn = MemoryStore(), FakeRealtime()
         ws = FakeWS([b"\x00\x00" * 640, b"\x00\x00" * 640, 0.3])
         voice_openai.RealtimeVoiceBridge(ws, store, Toolset(store, None, caller="chatgpt (voice)"), "system",
-                                         FakeRealtimeConnect(conn), hints="SkuVault, Ruvy").run()
+                                         FakeRealtimeConnect(conn), hints="Supabase, Ana").run()
         frames = [json.loads(f) for f in ws.sent if isinstance(f, str)]
         self.assertEqual([f["type"] for f in frames[:2]], ["status", "ready"])
         self.assertIn({"type": "tool", "name": "record_fact"}, frames)
@@ -437,7 +437,7 @@ class RealtimeVoiceTests(unittest.TestCase):
         self.assertEqual(session["audio"]["input"]["turn_detection"], {
             "type": "server_vad", "silence_duration_ms": 1200, "create_response": True, "interrupt_response": True})
         self.assertEqual(session["audio"]["input"]["format"], {"type": "audio/pcm", "rate": 24000})
-        self.assertEqual(session["audio"]["input"]["transcription"]["prompt"], "SkuVault, Ruvy")
+        self.assertEqual(session["audio"]["input"]["transcription"]["prompt"], "Supabase, Ana")
         self.assertIn("record_fact", [t["name"] for t in session["tools"]])
         self.assertTrue(session["instructions"].endswith(voice_openai.SPOKEN_REMINDER))
 
@@ -455,8 +455,8 @@ class RealtimeVoiceTests(unittest.TestCase):
 
 
 class SpeechTests(unittest.TestCase):
-    REPLY = ("## Brampton launch\n\nHere's where it stands:\n\n- **Ruvy** starts Monday\n- Evana needs [her badge](https://x.io/b)\n"
-             "1. Check `SkuVault` at https://skuvault.com/app\n\n```\nprint('hi')\n```\nWant me to message Sydney?")
+    REPLY = ("## Kowloon launch\n\nHere's where it stands:\n\n- **Ana** starts Monday\n- Evana needs [her badge](https://x.io/b)\n"
+             "1. Check `Supabase` at https://supabase.com/dashboard\n\n```\nprint('hi')\n```\nWant me to message Joy?")
 
     def test_clean_for_speech_keeps_words_not_symbols(self):
         import speech
@@ -464,14 +464,14 @@ class SpeechTests(unittest.TestCase):
         spoken = speech.clean_for_speech(self.REPLY)
         for gone in ("#", "**", "- ", "`", "https://", "[", "print("):
             self.assertNotIn(gone, spoken)
-        for kept in ("Brampton launch.", "Ruvy starts Monday.", "her badge", "SkuVault", "the link on screen",
-                     "Want me to message Sydney?"):
+        for kept in ("Kowloon launch.", "Ana starts Monday.", "her badge", "Supabase", "the link on screen",
+                     "Want me to message Joy?"):
             self.assertIn(kept, spoken)
 
     def test_split_keeps_every_word_in_bounded_parts(self):
         import speech
 
-        text = " ".join(f"Sentence number {i} is about the Brampton salon launch and who runs it." for i in range(60))
+        text = " ".join(f"Sentence number {i} is about the Kowloon agency launch and who runs it." for i in range(60))
         parts = speech.split_for_speech(text)
         self.assertGreater(len(parts), 1)
         self.assertTrue(all(len(p) <= speech.PART_CHARS for p in parts))
@@ -492,7 +492,7 @@ class SpeechTests(unittest.TestCase):
                 yield b"\x02\x00" * 100
             return make
 
-        long_reply = " ".join(["The Brampton launch is on track and Ruvy starts on Monday."] * 30)
+        long_reply = " ".join(["The Kowloon launch is on track and Ana starts on Monday."] * 30)
         with mock.patch.dict(speech.PROVIDERS, {"gemini": fake("gemini"), "openai": fake("openai", fail=True)}):
             speaker = speech.Speaker(MemorySecrets())
             audio = b"".join(speaker.stream("assistant", long_reply))
@@ -547,12 +547,10 @@ def demo_paste_connector(test):
 class IntegrationTests(unittest.TestCase):
     """Company systems through keys in Secret Manager: the key goes to its own host only and never to a model."""
 
-    KEYS = {"BIGCOMMERCE_gmosz3ja_ACCESS_TOKEN": "bc-secret-token-ca", "NOTION_API_KEY": "notion-secret-key",
-            "GENC_BIGCOMMERCE_PRODUCT_ACCESS_TOKEN": "genc-secret-token",
-            "GENC_BIGCOMMERCE_PRODUCT_API_PATH": "https://api.bigcommerce.com/stores/genc123/v3/"}
+    KEYS = {"GITHUB_TOKEN": "gh-secret-token", "NOTION_API_KEY": "notion-secret-key"}
 
     class Session:
-        def __init__(self, status=200, body='{"domain": "superhairpieces.ca", "currency": "CAD"}'):
+        def __init__(self, status=200, body='{"login": "talenttsang"}'):
             self.calls, self.status, self.body = [], status, body
 
         def request(self, method, url, headers=None, auth=None, json=None, timeout=None, **kw):
@@ -570,82 +568,55 @@ class IntegrationTests(unittest.TestCase):
         self.secrets = MemorySecrets(dict(self.KEYS))
 
     def test_read_goes_to_its_own_host_with_the_key_and_never_returns_it(self):
-        session = self.Session(body='{"id": 7, "echo": "bc-secret-token-ca"}')
-        result = self.integrations.call("bigcommerce_gmosz3ja", "GET", "/v2/orders", self.secrets,
-                                        query={"limit": 5}, session=session)
+        session = self.Session(body='{"id": 7, "echo": "gh-secret-token"}')
+        result = self.integrations.call("github", "GET", "/repos/talenttsang/chief-of-staff/issues", self.secrets,
+                                        query={"per_page": 5}, session=session)
         call = session.calls[0]
-        self.assertEqual(call["url"], "https://api.bigcommerce.com/stores/gmosz3ja/v2/orders?limit=5")
-        self.assertEqual(call["headers"]["X-Auth-Token"], "bc-secret-token-ca")
+        self.assertEqual(call["url"], "https://api.github.com/repos/talenttsang/chief-of-staff/issues?per_page=5")
+        self.assertEqual(call["headers"]["Authorization"], "Bearer gh-secret-token")
         self.assertEqual(result["data"], {"id": 7, "echo": "[secret]"})  # scrubbed even if a system echoes it
-        self.assertNotIn("bc-secret-token-ca", json.dumps(result))
+        self.assertNotIn("gh-secret-token", json.dumps(result))
 
     def test_paths_cannot_leave_the_system(self):
         from urllib.parse import urlsplit
 
         session = self.Session()
-        for path in ("https://evil.example/x", "/v2/../../x", "/v2/orders@evil.example", "/a b"):
-            result = self.integrations.call("bigcommerce_gmosz3ja", "GET", path, self.secrets, session=session)
+        for path in ("https://evil.example/x", "/repos/../../x", "/repos/a@evil.example", "/a b"):
+            result = self.integrations.call("github", "GET", path, self.secrets, session=session)
             self.assertIn("error", result, path)
         self.assertEqual(session.calls, [])
-        # A protocol-relative path is just a path on the store's own host: the key still only goes there.
-        self.integrations.call("bigcommerce_gmosz3ja", "GET", "//evil.example/x", self.secrets, session=session)
-        self.assertEqual({urlsplit(c["url"]).netloc for c in session.calls}, {"api.bigcommerce.com"})
+        # A protocol-relative path is just a path on the system's own host: the key still only goes there.
+        self.integrations.call("github", "GET", "//evil.example/x", self.secrets, session=session)
+        self.assertEqual({urlsplit(c["url"]).netloc for c in session.calls}, {"api.github.com"})
 
     def test_changes_wait_for_confirmation_but_searches_do_not(self):
         session = self.Session(body="{}")
-        held = self.integrations.call("bigcommerce_gmosz3ja", "PUT", "/v3/catalog/products/1", self.secrets,
-                                      body={"price": 1}, session=session)
+        held = self.integrations.call("github", "PATCH", "/repos/a/b/issues/1", self.secrets,
+                                      body={"state": "closed"}, session=session)
         self.assertTrue(held["not_sent"])
         self.assertEqual(session.calls, [])
         self.integrations.call("notion", "POST", "/v1/search", self.secrets, body={"query": "launch"}, session=session)
         self.assertEqual(session.calls[-1]["method"], "POST")  # a search is a read
-        self.integrations.call("bigcommerce_gmosz3ja", "PUT", "/v3/catalog/products/1", self.secrets,
-                               body={"price": 1}, confirmed=True, session=session)
-        self.assertEqual(session.calls[-1]["json"], {"price": 1})
+        self.integrations.call("github", "PATCH", "/repos/a/b/issues/1", self.secrets,
+                               body={"state": "closed"}, confirmed=True, session=session)
+        self.assertEqual(session.calls[-1]["json"], {"state": "closed"})
 
     def test_a_key_the_app_cannot_read_is_named_not_guessed(self):
         session = self.Session()
         result = self.integrations.call("airtable", "GET", "/v0/meta/bases", self.secrets, session=session)
-        self.assertIn("can't read the AIRTABLE_COMPANY_TOKEN secret", result["error"])
+        self.assertIn("應用程式無法讀取 AIRTABLE_COMPANY_TOKEN 金鑰", result["error"])
         self.assertEqual(session.calls, [])
         described = {d["id"]: d for d in self.integrations.describe(self.secrets)}
-        self.assertEqual(described["bigcommerce_gmosz3ja"]["status"], "ready")
+        self.assertEqual(described["github"]["status"], "ready")
         self.assertEqual(described["airtable"]["status"], "no_access")
-        self.assertNotIn("bc-secret-token-ca", json.dumps(described))
-
-    def test_each_store_hash_maps_to_its_storefront(self):
-        session = self.Session()
-        self.integrations.call("bigcommerce_kzkmuqjqk9", "GET", "/v2/store", self.secrets, session=session)
-        self.assertEqual(session.calls[0]["url"], "https://api.bigcommerce.com/stores/kzkmuqjqk9/v2/store")
-        self.assertEqual(session.calls[0]["headers"]["X-Auth-Token"], "genc-secret-token")  # Gen'C's own token name
-        labels = {i.id: (i.label, i.system_id, i.kind) for i in self.integrations.REGISTRY if i.id.startswith("bigcommerce")}
-        self.assertEqual(labels["bigcommerce_gmosz3ja"], ("BigCommerce: superhairpieces.ca (CAD)", "bigcommerce_ca", "key"))
-        self.assertEqual(labels["bigcommerce_qet21urb3p"], ("BigCommerce: superhairpieces.es (EUR)", "bigcommerce_es", "key"))
-        self.assertEqual(labels["bigcommerce_cavofu"], ("BigCommerce: superhairpieces.com (USD)", "bigcommerce_com", "paste"))
-        com = self.integrations.connect_info("bigcommerce_com")
-        self.assertEqual(com["fields"][0]["secret"], "BIGCOMMERCE_cavofu_ACCESS_TOKEN")  # the repo's naming
-        self.assertIn("Store-level API accounts", com["help"])
-
-    def test_old_store_rows_are_tidied(self):
-        store = MemoryStore()
-        store.save_item("systems", "bigcommerce_qet21urb3p", {"name": "BigCommerce store qet21urb3p", "status": "connected"})
-        store.save_item("systems", "bigcommerce_eu", {"name": "BigCommerce: .nl / .fr / .es / .de", "status": "needed"})
-        self.integrations.seed_systems(store)
-        self.assertIsNone(store.get_item("systems", "bigcommerce_qet21urb3p"))
-        self.assertIsNone(store.get_item("systems", "bigcommerce_eu"))  # each EU store has its own row now
-        for row, name in (("bigcommerce_es", "superhairpieces.es"), ("bigcommerce_fr", "superhairpieces.fr"),
-                          ("bigcommerce_nl", "superhairpieces.nl"), ("bigcommerce_de", "superhairpieces.de")):
-            self.assertEqual(store.get_item("systems", row)["name"], f"BigCommerce: {name} (EUR)")
-        self.assertEqual(self.integrations.connect_info("bigcommerce_de")["fields"][0]["secret"],
-                         "BIGCOMMERCE_34amlu9gm_ACCESS_TOKEN")
+        self.assertNotIn("gh-secret-token", json.dumps(described))
 
     def test_check_all_updates_the_access_tab(self):
         store = MemoryStore()
         knowledge.ensure_seeded(store)
         results = self.integrations.check_all(self.secrets, store, session=self.Session())
-        self.assertTrue(results["bigcommerce_gmosz3ja"]["ok"])
-        self.assertEqual(results["bigcommerce_gmosz3ja"]["system"], "BigCommerce: superhairpieces.ca (CAD)")
-        self.assertEqual(store.get_item("systems", "bigcommerce_ca")["status"], "connected")
+        self.assertTrue(results["github"]["ok"])
+        self.assertEqual(store.get_item("systems", "github")["status"], "connected")
         self.assertEqual(store.get_item("systems", "airtable")["status"], "no_access")
         self.assertIn("AIRTABLE_COMPANY_TOKEN", store.get_item("systems", "airtable")["why"])
 
@@ -654,51 +625,26 @@ class IntegrationTests(unittest.TestCase):
         session = self.Session(body="{}")
         with mock.patch.object(self.integrations.requests, "request", session.request):
             owner = Toolset(store, None, caller="chatgpt", secrets=self.secrets)
-            owner.call("call_api", {"system": "bigcommerce_gmosz3ja", "method": "PUT", "path": "/v3/catalog/products/1",
-                                    "body": {"price": 1}, "confirmed": True})
+            owner.call("call_api", {"system": "github", "method": "PATCH", "path": "/repos/a/b/issues/1",
+                                    "body": {"state": "closed"}, "confirmed": True})
             self.assertEqual(store.list_actions()[0]["type"], "system_change")
             consulted = Toolset(store, None, caller="claude", secrets=self.secrets, may_change=False)
-            held = consulted.call("call_api", {"system": "bigcommerce_gmosz3ja", "method": "DELETE",
-                                               "path": "/v3/catalog/products/1", "confirmed": True})
+            held = consulted.call("call_api", {"system": "github", "method": "DELETE",
+                                               "path": "/repos/a/b/issues/1", "confirmed": True})
         self.assertTrue(held["not_sent"])
         self.assertEqual(len(session.calls), 1)
-
-    def test_skuvault_login_becomes_tokens_on_the_server(self):
-        secrets = MemorySecrets({"SKUVAULT_EMAIL": "ops@superhairpieces.com", "SKUVAULT_PASSWORD": "pw-secret-123"})
-        session = self.Session()
-        session.routes = {"https://app.skuvault.com/api/gettokens": '{"TenantToken": "tenant-tok-1", "UserToken": "user-tok-1"}',
-                          "https://app.skuvault.com/api/inventory/getWarehouses": '{"Warehouses": [{"Code": "TOR"}], "t": "tenant-tok-1"}'}
-        result = self.integrations.call("skuvault", "POST", "/api/inventory/getWarehouses", secrets, body={}, session=session)
-        self.assertEqual(session.calls[0]["json"], {"Email": "ops@superhairpieces.com", "Password": "pw-secret-123"})
-        self.assertEqual(session.calls[1]["json"], {"TenantToken": "tenant-tok-1", "UserToken": "user-tok-1"})
-        self.assertEqual(result["data"]["Warehouses"], [{"Code": "TOR"}])
-        self.assertNotIn("tenant-tok-1", json.dumps(result))  # the exchanged tokens are scrubbed too
-        self.integrations.call("skuvault", "POST", "/api/inventory/getWarehouses", secrets, body={}, session=session)
-        self.assertEqual(len(session.calls), 3)                  # logged in once, tokens reused
-        held = self.integrations.call("skuvault", "POST", "/api/products/updateProducts", secrets, body={}, session=session)
-        self.assertTrue(held["not_sent"])                        # not a get*: a change
-
-    def test_amazon_refresh_token_becomes_an_access_token(self):
-        secrets = MemorySecrets({"AMAZON_TOKEN": "Atzr|refresh", "AMAZON_CLIENT_IDENTIFIER": "amzn1.app", "AMAZON_CLIENT_SECRET": "sec"})
-        session = self.Session()
-        session.routes = {"https://api.amazon.com/auth/o2/token": '{"access_token": "Atza|access", "expires_in": 3600}',
-                          "https://sellingpartnerapi-na.amazon.com/sellers/v1/marketplaceParticipations": '{"payload": []}'}
-        result = self.integrations.call("amazon", "GET", "/sellers/v1/marketplaceParticipations", secrets, session=session)
-        self.assertEqual(session.calls[0]["data"]["grant_type"], "refresh_token")
-        self.assertEqual(session.calls[1]["headers"]["x-amz-access-token"], "Atza|access")
-        self.assertTrue(result["ok"])
 
     def test_google_tools_use_the_owner_sign_in(self):
         class Google:
             def auth_header(self):
                 return {"Authorization": "Bearer ya29.owner"}
 
-        session = self.Session(body='{"emailAddress": "manne@superhairpieces.com"}')
+        session = self.Session(body='{"emailAddress": "helperxpresss@gmail.com"}')
         result = self.integrations.call("gmail", "GET", "/gmail/v1/users/me/profile", None, session=session, google=Google())
         self.assertEqual(session.calls[0]["headers"]["Authorization"], "Bearer ya29.owner")
         self.assertTrue(result["ok"])
         missing = self.integrations.call("gmail", "GET", "/gmail/v1/users/me/profile", None, session=session)
-        self.assertIn("Google isn't connected", missing["error"])
+        self.assertIn("Google 尚未連接", missing["error"])
 
     def test_a_system_with_several_parts_is_connected_only_when_all_work(self):
         class Google:
@@ -721,27 +667,6 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(store.get_item("systems", "analytics")["status"], "error")
         self.assertIn("403", store.get_item("systems", "analytics")["why"])
 
-    def test_bigcommerce_token_without_store_settings_still_connects(self):
-        from types import SimpleNamespace as NS
-
-        calls = []
-
-        class Session:
-            def request(self, method, url, headers=None, **kw):
-                calls.append((url, headers["X-Auth-Token"]))
-                if url.endswith("/v2/store"):
-                    return NS(status_code=403, ok=False, text='{"title": "You don\'t have a required scope"}')
-                return NS(status_code=200, ok=True, text='{"data": {"inventory_count": 812}}')
-
-        store = MemoryStore()
-        knowledge.ensure_seeded(store)
-        secrets = MemorySecrets({"BIGCOMMERCE_gmosz3ja_ACCESS_TOKEN": "  bc-token-with-newline\r\n"})
-        results = self.integrations.check_all(secrets, store, session=Session(), only={"bigcommerce_gmosz3ja"})
-        self.assertTrue(results["bigcommerce_gmosz3ja"]["ok"])
-        self.assertEqual([u.split("/gmosz3ja")[1] for u, _ in calls], ["/v2/store", "/v3/catalog/summary"])
-        self.assertEqual(calls[0][1], "bc-token-with-newline")  # trimmed before it goes in a header
-        self.assertEqual(store.get_item("systems", "bigcommerce_ca")["status"], "connected")
-
     def test_a_refused_key_stops_at_the_first_check(self):
         from types import SimpleNamespace as NS
 
@@ -750,46 +675,22 @@ class IntegrationTests(unittest.TestCase):
         class Session:
             def request(self, method, url, **kw):
                 calls.append(url)
-                return NS(status_code=401, ok=False, text='{"title": "Unauthorized"}')
+                return NS(status_code=401, ok=False, text='{"message": "Bad credentials"}')
 
-        result = self.integrations.probe(self.integrations.BY_ID["bigcommerce_gmosz3ja"], self.secrets, session=Session())
+        result = self.integrations.probe(self.integrations.BY_ID["github"], self.secrets, session=Session())
         self.assertEqual((result["status"], len(calls)), (401, 1))
-
-    def test_trustpilot_uses_the_business_account_like_the_pipeline(self):
-        bu = self.integrations.TRUSTPILOT_BU
-        session = self.Session()
-        session.routes = {"https://api.trustpilot.com/v1/oauth/oauth-business-users-for-applications/accesstoken":
-                          '{"access_token": "tp-bearer", "expires_in": 3600}'}
-        with_secret = MemorySecrets({"TRUSTPILOT_API_KEY": "tp-key", "TRUSTPILOT_API_SECRET": "tp-secret"})
-        result = self.integrations.probe(self.integrations.BY_ID["trustpilot"], with_secret, session=session)
-        token_call, probe_call = session.calls
-        self.assertEqual(token_call["auth"], ("tp-key", "tp-secret"))
-        self.assertTrue(probe_call["url"].endswith(f"/v1/private/business-units/{bu}/reviews?perPage=1"))
-        self.assertEqual(probe_call["headers"]["Authorization"], "Bearer tp-bearer")
-        self.assertEqual(probe_call["headers"]["apikey"], "tp-key")
-        self.assertTrue(result["ok"])
-        # Without the secret (not granted yet) it still connects on the public API instead of failing.
-        self.integrations._exchanged.clear()
-        public = self.Session()
-        self.integrations.call("trustpilot", "GET", f"/v1/business-units/{bu}", MemorySecrets({"TRUSTPILOT_API_KEY": "tp-key"}),
-                               session=public)
-        self.assertNotIn("Authorization", public.calls[0]["headers"])
-        import cloud_setup
-        self.assertIn("TRUSTPILOT_API_SECRET", cloud_setup.plan())  # Connect everything grants it
-
-    def test_merchant_center_connects_through_the_google_sign_in(self):
-        self.assertEqual(self.integrations.connect_info("merchant_center")["kind"], "google")
-        from google_apis import ASSISTANT_SCOPES
-        self.assertIn("https://www.googleapis.com/auth/content", ASSISTANT_SCOPES)
 
     def test_retired_connectors_leave_the_access_tab(self):
         store = MemoryStore()
-        store.save_item("systems", "hubspot", {"name": "HubSpot", "status": "no_access"})
-        store.save_item("systems", "reamaze", {"name": "Re:amaze", "status": "needed"})
+        for sid in ("hubspot", "reamaze", "bigcommerce_ca", "skuvault", "walmart", "merchant_center", "google_chat"):
+            store.save_item("systems", sid, {"name": sid, "status": "needed"})
         self.integrations.seed_systems(store)
-        self.assertIsNone(store.get_item("systems", "hubspot"))
-        self.assertIsNone(store.get_item("systems", "reamaze"))
+        for sid in ("hubspot", "reamaze", "bigcommerce_ca", "skuvault", "walmart", "merchant_center", "google_chat"):
+            self.assertIsNone(store.get_item("systems", sid), sid)
         self.assertNotIn("HUBSPOT_ACCESS_TOKEN", self.integrations.secret_names())
+        self.assertFalse({"skuvault", "walmart_ca", "amazon", "merchant_center"} & set(self.integrations.BY_ID))
+        from google_apis import ASSISTANT_SCOPES
+        self.assertNotIn("https://www.googleapis.com/auth/content", ASSISTANT_SCOPES)  # Merchant Center is gone
 
     def test_a_key_pasted_elsewhere_is_seen_within_seconds(self):
         from types import SimpleNamespace as NS
@@ -809,77 +710,15 @@ class IntegrationTests(unittest.TestCase):
         secrets._client, secrets._cache = Client(), {}
         clock = [1000.0]
         with mock.patch("store.time.time", lambda: clock[0]):
-            self.assertIsNone(secrets.get("BIGCOMMERCE_34amlu9gm_ACCESS_TOKEN"))  # checked before the paste
-            secrets._client.value = "bc-de-token"                              # pasted, on another instance
+            self.assertIsNone(secrets.get("GITHUB_TOKEN"))  # checked before the paste
+            secrets._client.value = "gh-token"               # pasted, on another instance
             clock[0] += 5
-            self.assertIsNone(secrets.get("BIGCOMMERCE_34amlu9gm_ACCESS_TOKEN"))  # still briefly remembered
+            self.assertIsNone(secrets.get("GITHUB_TOKEN"))  # still briefly remembered
             clock[0] += 15
-            self.assertEqual(secrets.get("BIGCOMMERCE_34amlu9gm_ACCESS_TOKEN"), "bc-de-token")  # seen now
+            self.assertEqual(secrets.get("GITHUB_TOKEN"), "gh-token")  # seen now
             secrets._client.value = "rotated"
             clock[0] += 60
-            self.assertEqual(secrets.get("BIGCOMMERCE_34amlu9gm_ACCESS_TOKEN"), "bc-de-token")  # found values stay cached
-
-    def test_walmart_canada_signs_each_request_as_documented(self):
-        import base64
-
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding, rsa
-
-        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        der = key.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
-        secrets = MemorySecrets({"WALMART_CA_CONSUMERID": "consumer-123", "WALMART_CA_CHANNEL_TYPE": "channel-456",
-                                 "WALMART_CA_PRIVATE_KEY": base64.b64encode(der).decode()})  # bare PKCS#8, as Walmart gives it
-        session = self.Session(body='{"list": {"elements": {"order": []}}}')
-        result = self.integrations.call("walmart_ca", "GET", "/v3/ca/orders", secrets,
-                                        query={"createdStartDate": "2026-09-01", "limit": 10}, session=session)
-        self.assertTrue(result["ok"])
-        call = session.calls[0]
-        url, h = call["url"], call["headers"]
-        self.assertEqual(url, "https://marketplace.walmartapis.com/v3/ca/orders?createdStartDate=2026-09-01&limit=10")
-        self.assertEqual((h["WM_CONSUMER.ID"], h["WM_CONSUMER.CHANNEL.TYPE"], h["WM_TENANT_ID"]),
-                         ("consumer-123", "channel-456", "WALMART.CA"))
-        signed = f"consumer-123\n{url}\nGET\n{h['WM_SEC.TIMESTAMP']}\n".encode()  # consumer, URL, method, time
-        key.public_key().verify(base64.b64decode(h["WM_SEC.AUTH_SIGNATURE"]), signed, padding.PKCS1v15(), hashes.SHA256())
-        info = self.integrations.connect_info("walmart")
-        self.assertEqual([f["secret"] for f in info["fields"]], ["WALMART_CA_CHANNEL_TYPE"])  # the rest is stored
-
-    def test_amazon_accounts_find_their_region_and_marketplaces(self):
-        secrets = MemorySecrets({"AMAZON_2_REFRESH_TOKEN": "Atzr|two", "AMAZON_CLIENT_IDENTIFIER": "amzn1.app",
-                                 "AMAZON_CLIENT_SECRET": "sec"})
-        payload = json.dumps({"payload": [
-            {"marketplace": {"domainName": "www.amazon.de"}, "participation": {"isParticipating": True}},
-            {"marketplace": {"domainName": "www.amazon.fr"}, "participation": {"isParticipating": True}},
-            {"marketplace": {"domainName": "www.amazon.it"}, "participation": {"isParticipating": False}}]})
-        from types import SimpleNamespace as NS
-        calls = []
-
-        class Session:
-            def request(self, method, url, headers=None, **kw):
-                calls.append(url)
-                if url.endswith("/auth/o2/token"):
-                    return NS(status_code=200, ok=True, text='{"access_token": "Atza|two", "expires_in": 3600}')
-                if "sellingpartnerapi-eu" in url:
-                    return NS(status_code=200, ok=True, text=payload)
-                return NS(status_code=403, ok=False, text='{"errors": [{"code": "Unauthorized"}]}')
-
-        store = MemoryStore()
-        results = self.integrations.check_all(secrets, store, session=Session(), only={"amazon_2"})
-        self.assertTrue(results["amazon_2"]["ok"])
-        self.assertEqual(results["amazon_2"]["system"], "Amazon: amazon.de, amazon.fr")
-        self.assertIn("https://sellingpartnerapi-eu.amazon.com/sellers/v1/marketplaceParticipations", calls[-1])
-        self.assertEqual(self.integrations.connect_info("amazon_2")["fields"][0]["secret"], "AMAZON_2_REFRESH_TOKEN")
-        self.assertEqual(self.integrations.connect_info("amazon")["kind"], "key")  # account 1: the stored token
-        import cloud_setup
-        plan = cloud_setup.plan()
-        self.assertEqual((plan["AMAZON_3_REFRESH_TOKEN"], plan["WALMART_CA_CHANNEL_TYPE"], plan["WALMART_CA_PRIVATE_KEY"]),
-                         (True, True, False))
-
-    def test_teamdesk_needs_no_paste(self):
-        info = self.integrations.connect_info("teamdesk")
-        self.assertEqual(info["kind"], "key")
-        session = self.Session(body="{}")
-        self.integrations.call("teamdesk", "GET", "/describe.json", MemorySecrets({"TEAMDESK_TOKEN": "td-tok"}), session=session)
-        self.assertEqual(session.calls[0]["url"], "https://www.teamdesk.net/secure/api/v2/56554/td-tok/describe.json")
+            self.assertEqual(secrets.get("GITHUB_TOKEN"), "gh-token")  # found values stay cached
 
     def test_connect_info_for_the_access_tab(self):
         demo_paste_connector(self)
@@ -887,8 +726,9 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual((demo["kind"], demo["fields"][0]["secret"]), ("paste", "DEMO_CRM_TOKEN"))
         self.assertIn("Create token", demo["help"])
         self.assertIsNone(self.integrations.connect_info("hubspot"))  # retired
-        self.assertIsNone(self.integrations.connect_info("reamaze"))
-        self.assertEqual(self.integrations.connect_info("bigcommerce_ca")["kind"], "key")
+        self.assertIsNone(self.integrations.connect_info("bigcommerce_ca"))
+        github = self.integrations.connect_info("github")
+        self.assertEqual((github["kind"], github["fields"][0]["secret"]), ("paste", "GITHUB_TOKEN"))
         self.assertEqual(self.integrations.connect_info("gmail")["kind"], "google")
         self.assertIsNone(self.integrations.connect_info("meta"))
 
@@ -923,7 +763,7 @@ class ResearchAndWorkTests(unittest.TestCase):
         page = tools.call("read_webpage", {"url": "https://example.com/prices"})
         self.assertIn("$300", page["text"])
         self.assertIn("error", tools.call("read_webpage", {"url": "file:///etc/passwd"}))
-        self.assertIn("can't read the FIRECRAWL_API", Toolset(self.store, None).call("web_search", {"query": "x"})["error"])
+        self.assertIn("無法讀取 FIRECRAWL_API", Toolset(self.store, None).call("web_search", {"query": "x"})["error"])
 
     def test_the_assistant_works_a_task_and_reports(self):
         import worker
@@ -933,7 +773,7 @@ class ResearchAndWorkTests(unittest.TestCase):
         fake = FakePartner("Found three suppliers: A ($12/m), B ($14/m), C ($15/m). Nothing needs your OK.",
                            tool=("update_task", {"task_id": "t1", "status": "done"}))
         with mock.patch.dict(talk.PARTNERS, {"assistant": fake}):
-            service = talk.Talk(self.store, self.secrets, lambda: None, "manne@superhairpieces.com")
+            service = talk.Talk(self.store, self.secrets, lambda: None, "talenttsang@gmail.com")
             outcome = worker.work_on(service, self.store, "t1")
         self.assertTrue(outcome["done"])
         prompt = fake.calls[-1]["history"][0]["text"]
@@ -959,12 +799,12 @@ class ResearchAndWorkTests(unittest.TestCase):
                             "recent": {"owner": "Assistant", "status": "in_progress", "worked_at": recent},
                             "busy": {"owner": "Assistant", "status": "in_progress", "working_since": recent[:-6] and now.isoformat()},
                             "done": {"owner": "Assistant", "status": "done"},
-                            "sydney": {"owner": "Sydney", "status": "todo"}}.items():
+                            "joy": {"owner": "Joy", "status": "todo"}}.items():
             self.store.save_task(tid, {"title": tid, **fields})
         due = sorted(t["id"] for t in self.store.list_tasks() if worker.due_for_work(t, now))
         self.assertEqual(due, ["mine", "stale"])
         with mock.patch.dict(talk.PARTNERS, {"assistant": FakePartner("Report.")}):
-            service = talk.Talk(self.store, self.secrets, lambda: None, "manne@superhairpieces.com")
+            service = talk.Talk(self.store, self.secrets, lambda: None, "talenttsang@gmail.com")
             worked = worker.work_due(service, self.store, limit=1)
         self.assertEqual(len(worked), 1)
 
@@ -1016,11 +856,11 @@ class CloudSetupTests(unittest.TestCase):
         self.assertIn("DEMO_CRM_TOKEN", report["created"])
         self.assertIn("FIGMA_TOKEN", report["missing"])          # should exist but doesn't: reported, not created
         self.assertIn("AIRTABLE_COMPANY_TOKEN", report["already"])
-        self.assertIn("BIGCOMMERCE_gmosz3ja_ACCESS_TOKEN", report["granted"])
+        self.assertIn("NOTION_API_KEY", report["granted"])
         self.assertEqual(report["errors"], [])
         roles = {b["role"] for b in cloud.policies["DEMO_CRM_TOKEN"]["bindings"]}
         self.assertEqual(roles, {"roles/secretmanager.secretAccessor", "roles/secretmanager.secretVersionManager"})
-        roles = {b["role"] for b in cloud.policies["BIGCOMMERCE_gmosz3ja_ACCESS_TOKEN"]["bindings"]}
+        roles = {b["role"] for b in cloud.policies["NOTION_API_KEY"]["bindings"]}
         self.assertEqual(roles, {"roles/secretmanager.secretAccessor"})  # a stored key is only read
         self.assertIn("searchconsole.googleapis.com", report["enabled"])
         self.assertFalse(any(":setIamPolicy" in c[1] and "AIRTABLE" in c[1] for c in cloud.calls))  # nothing to change
@@ -1042,8 +882,8 @@ class CloudSetupTests(unittest.TestCase):
     def test_logins_are_used_on_the_server_only(self):
         import integrations
 
-        self.assertIn("SKUVAULT_PASSWORD", integrations.secret_names())
-        described = json.dumps(integrations.describe(MemorySecrets({"SKUVAULT_PASSWORD": "pw-secret-123"})))
+        self.assertIn("NOTION_API_KEY", integrations.secret_names())
+        described = json.dumps(integrations.describe(MemorySecrets({"NOTION_API_KEY": "pw-secret-123"})))
         self.assertNotIn("pw-secret-123", described)
 
 
@@ -1241,10 +1081,10 @@ class WebTests(unittest.TestCase):
 
     def test_answering_a_question(self):
         q = self.store.list_items("questions")[0]
-        r = self.call("POST", f"/api/questions/{q['id']}/answer", {"answer": "Gen'C sells cosmetics in Canada"}).get_json()
+        r = self.call("POST", f"/api/questions/{q['id']}/answer", {"answer": "HelperConnects matches helpers in Hong Kong"}).get_json()
         self.assertEqual(r["question"]["status"], "answered")
         self.assertEqual(r["note"], "assistant here")
-        self.assertTrue(any("cosmetics" in f["text"] for f in self.store.list_items("facts")))
+        self.assertTrue(any("matches helpers" in f["text"] for f in self.store.list_items("facts")))
         self.assertEqual(self.call("POST", f"/api/questions/{q['id']}/answer", {"answer": ""}).status_code, 400)
 
     def test_skip_and_not_relevant_remove_questions_entirely(self):
@@ -1256,7 +1096,7 @@ class WebTests(unittest.TestCase):
         self.assertFalse({a["id"], b["id"]} & ids)
 
     def test_projects_systems_settings(self):
-        p = self.call("POST", "/api/projects", {"name": "Brampton launch", "company": "superhairpieces"}).get_json()["project"]
+        p = self.call("POST", "/api/projects", {"name": "Kowloon launch", "company": "helperxpress"}).get_json()["project"]
         self.call("PATCH", f"/api/projects/{p['id']}", {"status": "blocked"})
         self.assertEqual(self.store.get_item("projects", p["id"])["status"], "blocked")
         self.call("PATCH", "/api/systems/hosting", {"status": "connected"})
@@ -1370,7 +1210,7 @@ class WebTests(unittest.TestCase):
         frames, config = self._voice_call("chatgpt", FakeLiveSession(), [])
         self.assertIsNone(config)
         self.assertEqual(frames[-1]["type"], "error")
-        self.assertIn("switched off", frames[-1]["message"])
+        self.assertIn("已在設定中關閉", frames[-1]["message"])
 
     def test_speak_endpoint(self):
         class FakeSpeaker:

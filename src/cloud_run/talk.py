@@ -89,7 +89,7 @@ directly and completely; you can use the knowledge tools, but you can't send mes
 """
 
 
-def system_prompt(store, partner, voice=False, consulted=False, owner_email="manne@superhairpieces.com", relayed=False):
+def system_prompt(store, partner, voice=False, consulted=False, owner_email="talenttsang@gmail.com", relayed=False):
     now = datetime.now(timezone.utc).astimezone(TZ).strftime("%A %Y-%m-%d %H:%M %Z")
     parts = [ROLE[partner], MISSION.format(owner=owner_email), LANGUAGE]
     if partner == "assistant":
@@ -128,7 +128,7 @@ class Talk:
     def partner_status(self, name):
         settings = self.store.get_settings()
         if name != "assistant" and not settings.get("partners_enabled", True):
-            return False, "Partners are switched off in Settings"
+            return False, "AI 夥伴已在設定中關閉"
         return PARTNERS[name].available(self.secrets)
 
     def _model(self, name):
@@ -138,7 +138,7 @@ class Talk:
         def consult(partner, request):
             ok, why = self.partner_status(partner)
             if not ok:
-                return f"({PARTNERS[partner].LABEL} isn't available: {why})"
+                return f"（{PARTNERS[partner].LABEL} 暫時無法使用：{why}）"
             toolset = Toolset(self.store, self._google(), caller=partner, secrets=self.secrets, may_change=False,
                               exclude=NOT_FOR_PARTNERS)
             result = PARTNERS[partner].respond(
@@ -158,7 +158,7 @@ class Talk:
             raise ValueError(f"unknown partner {partner}")
         ok, why = self.partner_status(partner)
         if not ok:
-            raise RuntimeError(f"{PARTNERS[partner].LABEL} isn't available: {why}")
+            raise RuntimeError(f"{PARTNERS[partner].LABEL} 暫時無法使用：{why}")
         history = [t for t in self.store.get_talk(partner) if t.get("role") in ("user", "assistant")][-24:]
         user_turn = {"role": "user", "text": message.strip()[:8000], "at": utcnow_iso()}
         toolset = self.toolset(partner, voice=voice, images=True)  # typed, or the voice relay's typed answer
@@ -191,7 +191,7 @@ class Talk:
         for name, module in PARTNERS.items():
             ok, why = self.partner_status(name)
             if not ok:
-                out[name] = {"ok": False, "detail": why, "off": "switched off" in why}
+                out[name] = {"ok": False, "detail": why, "off": "已在設定中關閉" in why}
                 continue
             try:
                 kwargs = {"model": self._model(name)} if name == "chatgpt" else {}

@@ -12,7 +12,7 @@ import tools  # noqa: E402
 from store import MemorySecrets, MemoryStore  # noqa: E402
 from tools import Toolset  # noqa: E402
 
-PAGE = {"session": "s1", "device": "desktop", "url": "https://www.superhairpieces.com/", "title": "Superhairpieces",
+PAGE = {"session": "s1", "device": "desktop", "url": "https://www.helperxpress.com/", "title": "HelperXpress",
         "viewport": {"width": 1280, "height": 800}, "scroll": {"y": 0, "height": 4000}, "image": "SU1BR0U=",
         "elements": [{"kind": "a", "label": "Toupees", "x": 120, "y": 40}], "text": "Hair systems for men",
         "notes": []}
@@ -38,7 +38,7 @@ class BrowserToolTests(unittest.TestCase):
     def test_each_step_updates_the_screen_people_watch(self):
         store = MemoryStore()
         ts = Toolset(store, None, caller="claude")
-        ts.call("browser", {"action": "open", "url": "https://www.superhairpieces.com/"})
+        ts.call("browser", {"action": "open", "url": "https://www.helperxpress.com/"})
         view = store.list_browser_views()[0]
         self.assertEqual((view["id"], view["action"], view["image"], view["closed"]), ("claude", "open", "SU1BR0U=", False))
         with mock.patch.object(tools, "_browser_call", return_value={"session": "s1", "error": "No field matches 'x'."}):
@@ -65,7 +65,7 @@ class BrowserToolTests(unittest.TestCase):
     def test_open_attaches_the_screenshot_and_reuses_the_tab(self):
         ts = self.toolset()
         self.assertIn("browser", [s["name"] for s in ts.specs()])
-        result = ts.call("browser", {"action": "open", "url": "superhairpieces.com"})
+        result = ts.call("browser", {"action": "open", "url": "helperxpress.com"})
         self.assertNotIn("_images", result)  # the image goes to the model, not into the JSON
         self.assertEqual(result["screenshot"], "attached: look at it")
         self.assertEqual(result["elements"], ["a 'Toupees' at 120,40"])

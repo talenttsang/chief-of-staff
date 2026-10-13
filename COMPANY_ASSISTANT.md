@@ -151,10 +151,11 @@ offers only those named in `INTEGRATIONS`. The live app offers:
 | Gmail, Calendar, Drive | Connect Google, as helperxpresss@gmail.com |
 | Drive folders and calendars shared with Talent Solutions AI | Shared with chat-assistant@helperexpress-hk.iam.gserviceaccount.com; nothing to connect |
 
-`integrations.py` also has connectors from the app's earlier use (BigCommerce, Amazon,
-Walmart, SkuVault, Airtable, Notion, Figma, Trustpilot, web research and others). Add
-an id to `INTEGRATIONS` to offer one; its key must be in `helperexpress-hk`'s Secret
-Manager.
+`integrations.py` also has general connectors that are off for now: Airtable, Notion, Figma, Google Analytics
+and Search Console, Google Sheets, web research (Firecrawl) and SEO research (DataForSEO). Add an id to
+`INTEGRATIONS` to offer one; its key must be in `helperexpress-hk`'s Secret Manager. The Superhairpieces
+connectors (BigCommerce, Amazon, Walmart, SkuVault, Trustpilot, Stamped, Omnisend, TeamDesk, Merchant Center)
+were removed on 2026-10-13.
 
 The models read pages, emails and a conversation many people share, so the design
 assumes someone may try to talk them into misusing a key:

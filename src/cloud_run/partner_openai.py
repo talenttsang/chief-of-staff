@@ -16,7 +16,7 @@ LABEL = "ChatGPT"
 
 def available(secrets):
     if not secrets.get(API_KEY_SECRET):
-        return False, f"Secret {API_KEY_SECRET} is missing or the assistant can't read it"
+        return False, f"{API_KEY_SECRET} 金鑰不存在或助理無法讀取"
     return True, ""
 
 

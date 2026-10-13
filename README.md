@@ -82,7 +82,7 @@ Live values are set on the Cloud Run service.
 
 | Env var | Live value | Default in code |
 |---|---|---|
-| `OWNER_EMAIL` | `talenttsang@gmail.com` | `manne@superhairpieces.com` |
+| `OWNER_EMAIL` | `talenttsang@gmail.com` | `talenttsang@gmail.com` |
 | `GOOGLE_ACCOUNT` | `helperxpresss@gmail.com` | `OWNER_EMAIL` |
 | `GCP_PROJECT` | `helperexpress-hk` | `helperexpress-hk` |
 | `SECRETS_PROJECT` | (unset) | `GCP_PROJECT` |

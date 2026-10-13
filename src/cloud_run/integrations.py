@@ -14,8 +14,8 @@ Three ways a system gets connected (the Access tab's Connect buttons):
 Everyone who signs in shares one conversation, and pages and emails it reads are written by
 others, so any of them could try to talk it into misusing a key. The rules that make that fail:
 
-- Key values never reach a model. The server adds them to each request (logins such
-  as SkuVault's and Amazon's are exchanged for tokens on the server), and scrubs
+- Key values never reach a model. The server adds them to each request (a login that
+  must be exchanged for a token is exchanged on the server), and scrubs
   them from anything a system sends back.
 - Every system has one pinned address. A path can't point a request (or its key)
   at any other host.
@@ -32,8 +32,6 @@ from urllib.parse import urlencode, urlsplit
 import requests
 
 MAX_RESPONSE_CHARS = 10000
-TEAMDESK_DATABASE_ID = os.environ.get("TEAMDESK_DATABASE_ID", "56554")  # as trustpilot-pipeline uses
-TRUSTPILOT_BU = "5e44f707d7d8c700011eaa10"  # our Trustpilot business unit, from trustpilot-pipeline
 # The app's own Google identity: share a Drive folder or a calendar with this address and Talent Solutions AI can read it.
 SERVICE_ACCOUNT = os.environ.get("SERVICE_ACCOUNT_EMAIL") or \
     f"chat-assistant@{os.environ.get('GCP_PROJECT', 'helperexpress-hk')}.iam.gserviceaccount.com"
@@ -77,7 +75,7 @@ class Integration:
                 value = None
             value = value.strip() if isinstance(value, str) else value  # a pasted line break breaks a header
             if not value:
-                raise NotReady(f"the app can't read the {name} secret")
+                raise NotReady(f"應用程式無法讀取 {name} 金鑰")
             out[name] = value
         for name in self.optional:
             try:
@@ -96,304 +94,82 @@ class Integration:
         return [f[0] for f in self.fields]
 
 
-# A BigCommerce API account only reaches the areas it was given (orders, products, store settings...), so the
-# check tries each: any one answering proves the token. /v2/store first, because it names the storefront.
-BIGCOMMERCE_PROBES = ["/v2/store", "/v3/catalog/summary", "/v2/orders?limit=1", "/v3/customers?limit=1"]
-
-
-def _bigcommerce_label(data):
-    if isinstance(data, dict) and data.get("domain"):  # only /v2/store says; other probes keep the static name
-        return f"BigCommerce: {data['domain']} ({data.get('currency', '?')})"
-    return None
-
-
-def _bigcommerce(store_hash, token_secret, storefront, currency, system_id, paste=False):
-    """One BigCommerce store (each storefront is its own store, with its own hash and token)."""
-    return Integration(
-        id=f"bigcommerce_{store_hash}", label=f"BigCommerce: {storefront}" + (f" ({currency})" if currency else ""),
-        secrets=[token_secret],
-        base=f"https://api.bigcommerce.com/stores/{store_hash}",
-        headers=lambda v: {"X-Auth-Token": v[token_secret], "Accept": "application/json"},
-        hint=(f"Store {store_hash} is {storefront}; amounts are in "
-              f"{currency or 'the currency /v2/store reports'}. BigCommerce REST: /v2/store (store info), "
-              "/v2/orders?min_date_created=YYYY-MM-DD&limit=50, /v2/orders/{id}/products, "
-              "/v3/catalog/products?keyword=...&limit=50, /v3/customers?email:in=... "
-              "Revenue is never summed across currencies; orders with status_id 0 (Incomplete), 5 (Cancelled) "
-              "and 6 (Declined) are excluded from revenue. payment_method is free text: normalize it first."),
-        probe=BIGCOMMERCE_PROBES, system_id=system_id, category="Commerce", labeler=_bigcommerce_label,
-        **({"kind": "paste", "fields": [(token_secret, "Access token of a store-level API account", "", True)],
-            "help": (f"In the {storefront} BigCommerce admin: Settings > API > Store-level API accounts > Create API "
-                     "account (token type: V2/V3 API token). Name it \"Talent Solutions AI\" and set Orders, Products, "
-                     "Customers and Information & settings to read-only (or modify, if the assistant may change "
-                     "them). Save, then copy the Access token (BigCommerce shows it once) and paste it here.")}
-           if paste else {}))
-
-
 REGISTRY = [
-    # Store hashes from Manne (2026-09-30); tokens follow BIGCOMMERCE_<hash>_ACCESS_TOKEN, except Gen'C's.
-    # .com, .fr, .nl and .de had no token stored: their rows take one pasted in the app.
-    _bigcommerce("gmosz3ja", "BIGCOMMERCE_gmosz3ja_ACCESS_TOKEN", "superhairpieces.ca", "CAD", "bigcommerce_ca"),
-    _bigcommerce("cavofu", "BIGCOMMERCE_cavofu_ACCESS_TOKEN", "superhairpieces.com", "USD", "bigcommerce_com", paste=True),
-    _bigcommerce("qet21urb3p", "BIGCOMMERCE_qet21urb3p_ACCESS_TOKEN", "superhairpieces.es", "EUR", "bigcommerce_es"),
-    _bigcommerce("1tqjsol232", "BIGCOMMERCE_1tqjsol232_ACCESS_TOKEN", "superhairpieces.fr", "EUR", "bigcommerce_fr", paste=True),
-    _bigcommerce("1f8t0plkkw", "BIGCOMMERCE_1f8t0plkkw_ACCESS_TOKEN", "superhairpieces.nl", "EUR", "bigcommerce_nl", paste=True),
-    _bigcommerce("34amlu9gm", "BIGCOMMERCE_34amlu9gm_ACCESS_TOKEN", "superhairpieces.de", "EUR", "bigcommerce_de", paste=True),
-    _bigcommerce("kzkmuqjqk9", "GENC_BIGCOMMERCE_PRODUCT_ACCESS_TOKEN", "Gen'C Beauty", "", "bigcommerce_genc"),
     Integration(
         id="airtable", label="Airtable", secrets=["AIRTABLE_COMPANY_TOKEN"], base="https://api.airtable.com",
         headers=lambda v: {"Authorization": f"Bearer {v['AIRTABLE_COMPANY_TOKEN']}"},
         hint="/v0/meta/bases (list bases), /v0/meta/bases/{baseId}/tables, /v0/{baseId}/{tableIdOrName}?maxRecords=50",
-        probe="/v0/meta/bases", system_id="airtable", category="Operations"),
-    Integration(
-        # Business unit and sign-in as trustpilot-pipeline uses them; the secret unlocks the private endpoints.
-        id="trustpilot", label="Trustpilot", secrets=["TRUSTPILOT_API_KEY"], optional=["TRUSTPILOT_API_SECRET"],
-        base="https://api.trustpilot.com", headers=lambda v: {"apikey": v["TRUSTPILOT_API_KEY"]},
-        exchange=lambda v, http: _trustpilot_token(v, http),
-        hint=(f"Our business unit is {TRUSTPILOT_BU}. Public: /v1/business-units/{TRUSTPILOT_BU}, "
-              f"/v1/business-units/{TRUSTPILOT_BU}/reviews?perPage=20&orderBy=createdat.desc. Private (reviewer email, "
-              f"reply status): /v1/private/business-units/{TRUSTPILOT_BU}/reviews?perPage=20, /v1/private/reviews/{{id}}. "
-              "Replying: POST /v1/private/reviews/{id}/reply {\"message\": \"...\"} (a change: needs Manne's OK)."),
-        probe=[f"/v1/private/business-units/{TRUSTPILOT_BU}/reviews?perPage=1", f"/v1/business-units/{TRUSTPILOT_BU}"],
-        system_id="trustpilot", category="Reviews"),
-    Integration(
-        id="stamped", label="Stamped.io", secrets=["STAMPED_STORE_HASH", "STAMPED_PUBLIC_KEY", "STAMPED_PRIVATE_KEY"],
-        base=lambda v: f"https://stamped.io/api/v2/{v['STAMPED_STORE_HASH']}",
-        auth=lambda v: (v["STAMPED_PUBLIC_KEY"], v["STAMPED_PRIVATE_KEY"]),
-        hint="/dashboard/reviews?page=1 (product reviews), /dashboard/reviews?rating=1 (low ratings)",
-        probe="/dashboard/reviews?page=1", system_id="stamped", category="Reviews"),
-    Integration(
-        id="omnisend", label="Omnisend", secrets=["OMNISEND_API_KEY"], base="https://api.omnisend.com",
-        headers=lambda v: {"X-API-KEY": v["OMNISEND_API_KEY"], "Accept": "application/json"},
-        hint="/v3/contacts?limit=50, /v3/campaigns?limit=20 (email marketing)",
-        probe="/v3/contacts?limit=1", system_id="omnisend", category="Marketing"),
+        probe="/v0/meta/bases", system_id="airtable", category="營運"),
     Integration(
         id="notion", label="Notion", secrets=["NOTION_API_KEY"], base="https://api.notion.com",
         headers=lambda v: {"Authorization": f"Bearer {v['NOTION_API_KEY']}", "Notion-Version": "2022-06-28"},
         hint=('POST /v1/search with {"query": "..."} finds pages and databases (a read); '
               "/v1/pages/{id}, /v1/blocks/{id}/children, POST /v1/databases/{id}/query (a read)"),
         probe="/v1/users/me", read_posts=(r"^/v1/search$", r"^/v1/databases/[^/]+/query$"),
-        system_id="notion", category="Documents"),
+        system_id="notion", category="文件"),
     Integration(
         id="figma", label="Figma", secrets=["FIGMA_TOKEN"], base="https://api.figma.com",
         headers=lambda v: {"X-Figma-Token": v["FIGMA_TOKEN"]},
         hint="/v1/files/{fileKey}?depth=1, /v1/files/{fileKey}/comments, /v1/images/{fileKey}?ids=...",
-        probe="/v1/me", system_id="figma", category="Design"),
+        probe="/v1/me", system_id="figma", category="設計"),
 ]
 
-
-def _trustpilot_token(values, http):
-    """With the API secret, a business-user token for the private endpoints (as trustpilot-pipeline does)."""
-    if not values.get("TRUSTPILOT_API_SECRET"):
-        return {"ttl": 300}  # public endpoints only, with the API key header
-    resp = http.request("POST", "https://api.trustpilot.com/v1/oauth/oauth-business-users-for-applications/accesstoken",
-                        auth=(values["TRUSTPILOT_API_KEY"], values["TRUSTPILOT_API_SECRET"]),
-                        data={"grant_type": "client_credentials"}, timeout=30)
-    try:
-        data = json.loads(resp.text or "{}")
-    except ValueError:
-        data = {}
-    if not data.get("access_token"):
-        raise NotReady(f"Trustpilot didn't accept TRUSTPILOT_API_KEY / TRUSTPILOT_API_SECRET (HTTP {resp.status_code})")
-    return {"headers": {"Authorization": f"Bearer {data['access_token']}"}, "ttl": int(data.get("expires_in", 3600)) - 60}
-
-
-def _skuvault_tokens(values, http):
-    """SkuVault's API takes a tenant and user token in every request body; they come from the stored login."""
-    resp = http.request("POST", "https://app.skuvault.com/api/gettokens", timeout=30,
-                        json={"Email": values["SKUVAULT_EMAIL"], "Password": values["SKUVAULT_PASSWORD"]},
-                        headers={"Accept": "application/json", "Content-Type": "application/json"})
-    try:
-        data = json.loads(resp.text or "{}")
-    except ValueError:
-        data = {}
-    if not data.get("TenantToken") or not data.get("UserToken"):
-        raise NotReady(f"SkuVault didn't accept the stored login (SKUVAULT_EMAIL / SKUVAULT_PASSWORD, HTTP {resp.status_code})")
-    return {"body": {"TenantToken": data["TenantToken"], "UserToken": data["UserToken"]}, "ttl": 12 * 3600}
-
-
-AMAZON_REGIONS = {"na": "https://sellingpartnerapi-na.amazon.com", "eu": "https://sellingpartnerapi-eu.amazon.com",
-                  "fe": "https://sellingpartnerapi-fe.amazon.com"}
-AMAZON_APP = ["AMAZON_CLIENT_IDENTIFIER", "AMAZON_CLIENT_SECRET"]  # one SP-API app for every seller account
-
-
-def _amazon_exchange(refresh_secret):
-    """A seller account's refresh token -> a one-hour access token, and the region the account lives in."""
-    def exchange(values, http):
-        resp = http.request("POST", "https://api.amazon.com/auth/o2/token", timeout=30, data={
-            "grant_type": "refresh_token", "refresh_token": values[refresh_secret],
-            "client_id": values["AMAZON_CLIENT_IDENTIFIER"], "client_secret": values["AMAZON_CLIENT_SECRET"]})
-        try:
-            data = json.loads(resp.text or "{}")
-        except ValueError:
-            data = {}
-        if not data.get("access_token"):
-            raise NotReady(f"Amazon didn't accept {refresh_secret} with the app credentials (AMAZON_CLIENT_*, "
-                           f"HTTP {resp.status_code}: {data.get('error_description') or data.get('error') or ''})")
-        headers = {"x-amz-access-token": data["access_token"]}
-        for host in AMAZON_REGIONS.values():  # a token only works in its account's region: find it once
-            probe = http.request("GET", f"{host}/sellers/v1/marketplaceParticipations", headers=headers, timeout=30)
-            if probe.status_code == 200:
-                return {"headers": headers, "base": host, "ttl": int(data.get("expires_in", 3600)) - 120}
-        raise NotReady("Amazon accepted the token, but no Selling Partner region (NA, EU, FE) let it list its marketplaces")
-    return exchange
-
-
-def _amazon_label(data):
-    rows = (data or {}).get("payload") or []
-    names = sorted({(r.get("marketplace") or {}).get("domainName", "").replace("www.", "") for r in rows
-                    if (r.get("participation") or {}).get("isParticipating")} - {""})
-    return f"Amazon: {', '.join(names)}" if names else None
-
-
-def _amazon(number, refresh_secret, paste=False):
-    return Integration(
-        id="amazon" if number == 1 else f"amazon_{number}", label=f"Amazon seller account {number}",
-        secrets=[refresh_secret] + AMAZON_APP, base=AMAZON_REGIONS["na"], exchange=_amazon_exchange(refresh_secret),
-        headers=lambda v: {"Accept": "application/json"}, labeler=_amazon_label,
-        hint=("Selling Partner API (the region is found automatically). /sellers/v1/marketplaceParticipations (this "
-              "account's marketplaces and their ids: Canada A2EUQ1WTGCTBG2, US ATVPDKIKX0DER), "
-              "/orders/v0/orders?MarketplaceIds=...&CreatedAfter=YYYY-MM-DD, /orders/v0/orders/{id}/orderItems, "
-              "/fba/inventory/v1/summaries?granularityType=Marketplace&granularityId=...&marketplaceIds=..."),
-        probe="/sellers/v1/marketplaceParticipations", system_id="amazon" if number == 1 else f"amazon_{number}",
-        category="Commerce",
-        **({"kind": "paste", "fields": [(refresh_secret, "Refresh token (starts with Atzr|)", "Atzr|…", True)],
-            "help": ("Sign in to Seller Central as this seller account. Go to Apps and Services > Develop Apps, find "
-                     "the company's SP-API app, and choose Authorize (then Authorize app). Amazon shows a refresh "
-                     "token that starts with Atzr|: copy it and paste it here. The app's own id and secret are "
-                     "already stored. If the app isn't listed for this account, say so in the chat: the account then "
-                     "has to authorize it through a consent link instead.")} if paste else {}))
-
-
-def _walmart_ca_sign(values, method, url):
-    """Walmart Canada signs every call: SHA-256 with RSA over consumer id, URL, method and timestamp."""
-    import base64
-    import time
-    import uuid
-
-    from google.auth import crypt
-
-    key = values["WALMART_CA_PRIVATE_KEY"].strip()
-    if "BEGIN" not in key:  # stored as bare base-64 PKCS#8, the way Walmart hands it out
-        body = "".join(key.split())
-        key = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + \
-              "\n-----END PRIVATE KEY-----\n"
-    timestamp = str(int(time.time() * 1000))
-    consumer = values["WALMART_CA_CONSUMERID"]
-    signed = crypt.RSASigner.from_string(key).sign(f"{consumer}\n{url}\n{method.upper()}\n{timestamp}\n".encode())
-    return {"WM_CONSUMER.ID": consumer, "WM_SEC.TIMESTAMP": timestamp,
-            "WM_SEC.AUTH_SIGNATURE": base64.b64encode(signed).decode(),
-            "WM_CONSUMER.CHANNEL.TYPE": values["WALMART_CA_CHANNEL_TYPE"], "WM_QOS.CORRELATION_ID": str(uuid.uuid4()),
-            "WM_SVC.NAME": "Walmart Marketplace", "WM_TENANT_ID": "WALMART.CA", "WM_LOCALE_ID": "en_CA"}
-
-
-REGISTRY += [
-    Integration(
-        id="skuvault", label="SkuVault", secrets=["SKUVAULT_EMAIL", "SKUVAULT_PASSWORD"],
-        base="https://app.skuvault.com", headers=lambda v: {"Accept": "application/json"}, exchange=_skuvault_tokens,
-        hint=("Every SkuVault call is a POST with a JSON body (the server adds the tokens). Reads: "
-              "/api/inventory/getWarehouses, /api/products/getProducts {\"PageNumber\": 0, \"PageSize\": 100, "
-              "\"ProductSKUs\": [...]} or {..., \"ProductCodes\": [...]}, /api/inventory/getItemQuantities, "
-              "/api/inventory/getInventoryByLocation, /api/sales/getSales, /api/purchaseorders/getPOs. "
-              "A product has a SKU and a Code (its barcode: a 12-13 digit number is a UPC/EAN, so look it up as a "
-              "ProductCode). Is it in stock: /api/inventory/getItemQuantities {\"ProductCodes\": [...]} (codes only, "
-              "not SKUs; get the code from getProducts first) gives AvailableQuantity, TotalOnHand, HeldQuantity, "
-              "PendingQuantity and PickedQuantity; getInventoryByLocation {\"ProductSKUs\": [...]} (or {\"ProductCodes\": "
-              "[...], \"IsReturnByCodes\": true}) says which warehouse and location. "
-              "Anything not named get* changes data. SkuVault rate-limits hard: ask for what you need in one call."),
-        probe=("POST", "/api/inventory/getWarehouses", {}), read_posts=(r"^/api/\w+/get\w+$",),
-        system_id="skuvault", category="Inventory"),
-    _amazon(1, "AMAZON_TOKEN"),
-    _amazon(2, "AMAZON_2_REFRESH_TOKEN", paste=True),
-    _amazon(3, "AMAZON_3_REFRESH_TOKEN", paste=True),
-    Integration(
-        # Walmart Canada (the .gitignore'd "Walmart Global API (Canada)" collection): signed requests only.
-        id="walmart_ca", label="Walmart Canada", system_id="walmart", category="Commerce",
-        secrets=["WALMART_CA_CONSUMERID", "WALMART_CA_PRIVATE_KEY", "WALMART_CA_CHANNEL_TYPE"],
-        base="https://marketplace.walmartapis.com", headers=lambda v: {"Accept": "application/json"},
-        sign=_walmart_ca_sign, kind="paste",
-        fields=[("WALMART_CA_CHANNEL_TYPE", "Consumer Channel Type ID", "", False)],
-        help=("The consumer ID and private key are already stored; Walmart also needs the Consumer Channel Type ID "
-              "on every call. In Walmart Seller Center: Settings > API Integrations (API Settings), copy the "
-              "Consumer Channel Type (a long id), and paste it here."),
-        hint=("Walmart Canada marketplace. Orders: /v3/ca/orders?createdStartDate=YYYY-MM-DD&limit=100 "
-              "(createdStartDate is required; also status=Created|Acknowledged|Shipped|Cancelled), "
-              "/v3/ca/orders/{purchaseOrderId}. Feed statuses: /v3/feeds?limit=20. Items: /v3/ca/items?limit=50. "
-              "Acknowledging, shipping or changing listings are changes: they need Manne's OK."),
-        probe=["/v3/feeds?limit=1", "/v3/ca/orders?createdStartDate=2026-01-01&limit=1"]),
-    Integration(
-        id="teamdesk", label="TeamDesk", secrets=["TEAMDESK_TOKEN"],
-        # Database 56554 is the one trustpilot-pipeline writes to; TEAMDESK_DATABASE_ID (env) overrides it.
-        base=lambda v: f"https://www.teamdesk.net/secure/api/v2/{TEAMDESK_DATABASE_ID}/{v['TEAMDESK_TOKEN']}",
-        hint="/describe.json (tables), /{Table}/describe.json, /{Table}/select.json?column=...&filter=...&top=50",
-        probe="/describe.json", system_id="teamdesk", category="Operations"),
-]
 
 REGISTRY += [  # research
     Integration(
-        id="firecrawl", label="Web research (Firecrawl)", secrets=["FIRECRAWL_API"], base="https://api.firecrawl.dev",
+        id="firecrawl", label="網上研究（Firecrawl）", secrets=["FIRECRAWL_API"], base="https://api.firecrawl.dev",
         headers=lambda v: {"Authorization": f"Bearer {v['FIRECRAWL_API']}", "Content-Type": "application/json"},
         hint=('Used by web_search and read_webpage. Directly: POST /v1/search {"query": "...", "limit": 5}, '
               'POST /v1/scrape {"url": "...", "formats": ["markdown"], "onlyMainContent": true}, '
               'POST /v1/map {"url": "https://site"} (a site\'s pages). All are reads.'),
         probe=("POST", "/v1/search", {"query": "github", "limit": 1}),
-        read_posts=(r"^/v1/(search|scrape|map)$",), system_id="web_research", category="Research"),
+        read_posts=(r"^/v1/(search|scrape|map)$",), system_id="web_research", category="研究"),
     Integration(
-        id="dataforseo", label="SEO research (DataForSEO)", secrets=["DATAFORSEO_LOGIN", "DATAFORSEO_API_TOKEN"],
+        id="dataforseo", label="SEO 研究（DataForSEO）", secrets=["DATAFORSEO_LOGIN", "DATAFORSEO_API_TOKEN"],
         base="https://api.dataforseo.com", auth=lambda v: (v["DATAFORSEO_LOGIN"], v["DATAFORSEO_API_TOKEN"]),
         hint=("Each call costs a few cents: batch keywords into one request. Bodies are JSON arrays of tasks. "
               "POST /v3/serp/google/organic/live/advanced [{\"keyword\": \"...\", \"location_code\": 2124, "
-              "\"language_code\": \"en\"}] (2124 Canada, 2840 US), POST /v3/keywords_data/google_ads/search_volume/live "
-              "[{\"keywords\": [...], \"location_code\": 2124}], POST /v3/dataforseo_labs/google/ranked_keywords/live "
-              "[{\"target\": \"superhairpieces.ca\", \"location_code\": 2124}]. GET /v3/appendix/user_data (balance)."),
+              "\"language_code\": \"en\"}] (2344 Hong Kong), POST /v3/keywords_data/google_ads/search_volume/live "
+              "[{\"keywords\": [...], \"location_code\": 2344}], POST /v3/dataforseo_labs/google/ranked_keywords/live "
+              "[{\"target\": \"helperxpress.com\", \"location_code\": 2344}]. GET /v3/appendix/user_data (balance)."),
         probe="/v3/appendix/user_data", read_posts=(r"^/v3/.+/live(/\w+)?$",),
-        system_id="seo_research", category="Research"),
+        system_id="seo_research", category="研究"),
 ]
 
 GOOGLE = [  # used with Manne's own Google sign-in; their scopes are in google_apis.GOOGLE_TOOL_SCOPES
     Integration(id="gmail", label="Gmail", secrets=[], base="https://gmail.googleapis.com", kind="google",
                 hint=("/gmail/v1/users/me/messages?q=from:x newer_than:7d&maxResults=20, /gmail/v1/users/me/messages/{id}"
                       "?format=full. Drafts: POST /gmail/v1/users/me/drafts (a change: needs Manne's OK)."),
-                probe="/gmail/v1/users/me/profile", system_id="gmail", category="Communication"),
+                probe="/gmail/v1/users/me/profile", system_id="gmail", category="溝通"),
     Integration(id="google_drive", label="Google Drive", secrets=[], base="https://www.googleapis.com", kind="google",
                 hint="/drive/v3/files?q=name contains 'x'&fields=files(id,name,mimeType,modifiedTime), "
                      "/drive/v3/files/{id}/export?mimeType=text/plain (Docs as text)",
-                probe="/drive/v3/about?fields=user", system_id="google_drive", category="Documents"),
+                probe="/drive/v3/about?fields=user", system_id="google_drive", category="文件"),
     Integration(id="google_sheets", label="Google Sheets", secrets=[], base="https://sheets.googleapis.com",
                 kind="google", hint="/v4/spreadsheets/{id}?fields=sheets.properties, /v4/spreadsheets/{id}/values/{range}",
-                system_id="google_drive", category="Documents"),
-    Integration(id="ga4_admin", label="Google Analytics (properties)", secrets=[], base="https://analyticsadmin.googleapis.com",
+                system_id="google_drive", category="文件"),
+    Integration(id="ga4_admin", label="Google Analytics（資源）", secrets=[], base="https://analyticsadmin.googleapis.com",
                 kind="google", hint="/v1beta/accountSummaries (lists GA4 properties and their ids)",
-                probe="/v1beta/accountSummaries", system_id="analytics", category="Marketing",
+                probe="/v1beta/accountSummaries", system_id="analytics", category="市場推廣",
                 services=["analyticsadmin.googleapis.com"]),
-    Integration(id="ga4_data", label="Google Analytics (reports)", secrets=[], base="https://analyticsdata.googleapis.com",
+    Integration(id="ga4_data", label="Google Analytics（報告）", secrets=[], base="https://analyticsdata.googleapis.com",
                 kind="google", read_posts=(r"^/v1beta/properties/\d+:runReport$",),
                 hint=('POST /v1beta/properties/{id}:runReport (a read) with {"dateRanges": [{"startDate": "28daysAgo", '
                       '"endDate": "today"}], "dimensions": [{"name": "sessionDefaultChannelGroup"}], '
                       '"metrics": [{"name": "sessions"}, {"name": "purchaseRevenue"}]}'),
-                system_id="analytics", category="Marketing", services=["analyticsdata.googleapis.com"]),
+                system_id="analytics", category="市場推廣", services=["analyticsdata.googleapis.com"]),
     Integration(id="search_console", label="Google Search Console", secrets=[], base="https://searchconsole.googleapis.com",
                 kind="google", read_posts=(r"^/webmasters/v3/sites/[^/]+/searchAnalytics/query$",),
                 hint=("/webmasters/v3/sites (the sites), POST /webmasters/v3/sites/{url-encoded site}/searchAnalytics/query "
                       '(a read) with {"startDate": "...", "endDate": "...", "dimensions": ["query"], "rowLimit": 50}'),
-                probe="/webmasters/v3/sites", system_id="analytics", category="Marketing",
+                probe="/webmasters/v3/sites", system_id="analytics", category="市場推廣",
                 services=["searchconsole.googleapis.com"]),
 ]
-GOOGLE.append(Integration(
-    id="merchant_center", label="Google Merchant Center", secrets=[], base="https://merchantapi.googleapis.com",
-    kind="google", read_posts=(r"^/reports/v1/accounts/\d+/reports:search$",),
-    hint=("Accounts: 5298296396 Superhairpieces.ca (registered for API use), 289630622 Superhairpieces .com/EU, "
-          "670525760 Gen'C Beauty (these two need the project registered first: google-merchant/register_developer.py). "
-          "/products/v1/accounts/{id}/products?pageSize=50 (with approval status per country), "
-          "/accounts/v1/accounts/{id}, POST /reports/v1/accounts/{id}/reports:search (a read) with "
-          "{\"query\": \"SELECT offer_id, title, clicks, impressions FROM product_performance_view WHERE date "
-          "BETWEEN '2026-09-01' AND '2026-09-29'\"}"),
-    probe="/accounts/v1/accounts/5298296396", system_id="merchant_center", category="Marketing",
-    services=["merchantapi.googleapis.com"]))
 REGISTRY += GOOGLE
 
 OWN = [  # read as the app's own service account: what people share with SERVICE_ACCOUNT, no one's sign-in
     Integration(
-        id="shared_drive", label="Drive shared with Talent Solutions AI", secrets=[], base="https://www.googleapis.com",
+        id="shared_drive", label="與 Talent Solutions AI 共用的 Drive", secrets=[], base="https://www.googleapis.com",
         kind="self", scopes=["https://www.googleapis.com/auth/drive.readonly"],
         hint=(f"Files and folders people shared with Talent Solutions AI's own address, {SERVICE_ACCOUNT}. Read-only. "
               "GET /drive/v3/files with query {\"q\": \"sharedWithMe\", \"fields\": \"files(id,name,mimeType,"
@@ -401,10 +177,10 @@ OWN = [  # read as the app's own service account: what people share with SERVICE
               "{\"q\": \"'FOLDER_ID' in parents\", \"fields\": ...}. A Google Doc as text: "
               "/drive/v3/files/{id}/export?mimeType=text/plain (a Sheet's first tab: mimeType=text/csv); "
               "other files: /drive/v3/files/{id}?alt=media. A 404 means it isn't shared with Talent Solutions AI."),
-        probe="/drive/v3/about?fields=user", system_id="shared_drive", category="Documents",
+        probe="/drive/v3/about?fields=user", system_id="shared_drive", category="文件",
         services=["drive.googleapis.com"]),
     Integration(
-        id="shared_calendar", label="Calendars shared with Talent Solutions AI", secrets=[], base="https://www.googleapis.com",
+        id="shared_calendar", label="與 Talent Solutions AI 共用的日曆", secrets=[], base="https://www.googleapis.com",
         kind="self", scopes=["https://www.googleapis.com/auth/calendar.readonly"],
         hint=(f"Calendars people shared with Talent Solutions AI's own address, {SERVICE_ACCOUNT}. Read-only. A shared "
               "calendar isn't listed anywhere: read it by its id, which for someone's main calendar is their email "
@@ -412,7 +188,7 @@ OWN = [  # read as the app's own service account: what people share with SERVICE
               "\"2026-10-13T00:00:00Z\", \"timeMax\": \"...\", \"singleEvents\": \"true\", \"orderBy\": "
               "\"startTime\"}. Other calendars' ids are in their Google Calendar settings (Integrate calendar). "
               "A 404 means it isn't shared with Talent Solutions AI."),
-        probe="/calendar/v3/users/me/calendarList?maxResults=1", system_id="shared_calendar", category="Communication",
+        probe="/calendar/v3/users/me/calendarList?maxResults=1", system_id="shared_calendar", category="溝通",
         services=["calendar-json.googleapis.com"]),
 ]
 REGISTRY += OWN
@@ -429,7 +205,7 @@ REGISTRY += [  # engineering
               "base64), /search/issues?q=repo:{owner}/{repo}+is:open+label:bug. Changes need Manne's OK: POST "
               "/repos/{owner}/{repo}/issues {\"title\", \"body\"}, POST /repos/{owner}/{repo}/issues/{n}/comments "
               "{\"body\"}, PATCH /repos/{owner}/{repo}/issues/{n} {\"state\": \"closed\"}."),
-        probe="/user", system_id="github", category="Engineering", kind="paste",
+        probe="/user", system_id="github", category="工程", kind="paste",
         fields=[("GITHUB_TOKEN", "個人存取權杖（fine-grained）", "github_pat_…", True)],
         help=("在 GitHub 以擁有程式碼的帳戶登入：Settings > Developer settings > Personal access tokens > "
               "Fine-grained tokens > Generate new token。Resource owner：該帳戶。Repository access：HelperConnects 和 "
@@ -526,14 +302,14 @@ def call(integration_id, method, path, secrets, query=None, body=None, confirmed
         headers = dict(integration.headers(values)) if integration.headers else {}
         if integration.kind == "google":
             if google is None:
-                raise NotReady("Google isn't connected (press Connect in the banner at the top of the page)")
+                raise NotReady("Google 尚未連接（按頁頂橫額的「連接」）")
             headers.update(google.auth_header())
         elif integration.kind == "self":
             headers["Authorization"] = f"Bearer {_own_token(integration.scopes)}"
     except NotReady as exc:
-        return {"error": f"{integration.label} isn't available: {exc}"}
+        return {"error": f"{integration.label} 暫時無法使用：{exc}"}
     except Exception as exc:  # noqa: BLE001 - a failed login or token refresh, reported to the model
-        return {"error": f"{integration.label} isn't available: {str(exc)[:300]}"}
+        return {"error": f"{integration.label} 暫時無法使用：{str(exc)[:300]}"}
     scrub = dict(values, **{f"x{i}": str(v) for i, v in enumerate({**extra.get("headers", {}),
                                                                    **extra.get("body", {})}.values())})
     headers.update(extra.get("headers", {}))
@@ -548,7 +324,7 @@ def call(integration_id, method, path, secrets, query=None, body=None, confirmed
         try:
             signed = integration.sign(values, method, url)
         except Exception as exc:  # noqa: BLE001 - e.g. a private key in the wrong format
-            return {"error": f"{integration.label} isn't available: couldn't sign the request ({str(exc)[:200]})"}
+            return {"error": f"{integration.label} 暫時無法使用：無法簽署請求（{str(exc)[:200]}）"}
         headers.update(signed)
         scrub.update({f"s{i}": str(v) for i, v in enumerate(signed.values()) if len(str(v)) >= 20})
     auth = integration.auth(values) if integration.auth else None
@@ -590,7 +366,7 @@ def probe(integration, secrets, session=None, google=None):
 
 def status(integration, secrets, google=None):
     if integration.kind == "google":
-        return ("ready", "") if google is not None else ("no_access", "Google isn't connected")
+        return ("ready", "") if google is not None else ("no_access", "Google 尚未連接")
     if integration.kind == "self":
         return "ready", ""  # whatever is shared with it; a 404 says what isn't
     try:
@@ -623,9 +399,11 @@ def connect_info(system_id):
     return {"kind": found[0].kind, "integration": found[0].id}
 
 
-# Rows that no longer exist: HubSpot and Re:amaze (not needed for now), the store-hash row for qet21urb3p (now
-# "BigCommerce: superhairpieces.es") and the EU placeholder (each EU store has its own row now).
-RETIRED = {"hubspot", "reamaze", "bigcommerce_qet21urb3p", "bigcommerce_eu"}
+# Connectors removed from the app; their Access rows are dropped. The Superhairpieces ones went 2026-10-13.
+RETIRED = {"hubspot", "reamaze", "bigcommerce_qet21urb3p", "bigcommerce_eu", "bigcommerce_ca", "bigcommerce_com",
+           "bigcommerce_es", "bigcommerce_fr", "bigcommerce_nl", "bigcommerce_de", "bigcommerce_genc", "trustpilot",
+           "stamped", "omnisend", "skuvault", "amazon", "amazon_2", "amazon_3", "walmart", "teamdesk",
+           "merchant_center", "google_ads", "meta", "accounting", "google_chat", "workspace_directory"}
 RENAMED = {}
 
 
@@ -667,7 +445,7 @@ def check_all(secrets, store=None, session=None, google=None, only=None):
         ok = all(r[1] for r in rows)  # a system with several parts (Analytics) is connected when all work
         first_bad = next((r for r in rows if not r[1]), rows[0])
         detail = "" if ok else first_bad[3]
-        state = "connected" if ok else ("no_access" if "can't read" in detail or "isn't connected" in detail
+        state = "connected" if ok else ("no_access" if "無法讀取" in detail or "尚未連接" in detail
                                         else "error")
         existing = store.get_item("systems", system_id) or {}
         label = rows[0][2] if len(rows) == 1 else existing.get("name", rows[0][0].label)

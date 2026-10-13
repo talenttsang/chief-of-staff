@@ -17,7 +17,7 @@ HAS_PLAYWRIGHT = importlib.util.find_spec("playwright") is not None
 
 PAGES = {
     "/": """<html><head><title>Test shop</title></head><body>
-      <h1>Superhairpieces test</h1>
+      <h1>HelperXpress test</h1>
       <a href="/product">Lace wig</a>
       <button onclick="document.getElementById('msg').innerText='Added!'">Add to cart</button>
       <p id="msg">nothing yet</p>
@@ -61,7 +61,7 @@ class GuardTests(unittest.TestCase):
         with mock.patch.object(browser.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.5", 0))]):
             self.assertIn("private", browser.blocked_reason("https://sneaky.example/"))
         with mock.patch.object(browser.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("142.250.80.46", 0))]):
-            self.assertEqual(browser.blocked_reason("https://www.superhairpieces.com/"), "")
+            self.assertEqual(browser.blocked_reason("https://www.helperxpress.com/"), "")
         self.assertEqual(browser.blocked_reason("data:text/html,hi"), "")
 
     def test_secret_fields_are_recognised(self):
