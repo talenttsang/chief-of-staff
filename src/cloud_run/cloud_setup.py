@@ -20,6 +20,8 @@ import requests
 import integrations
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+# Secrets can live in a different project from Firestore and Vertex AI; the app's service account stays in GCP_PROJECT.
+SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT") or GCP_PROJECT
 APP_SERVICE_ACCOUNT = os.environ.get("APP_SERVICE_ACCOUNT", f"chat-assistant@{GCP_PROJECT}.iam.gserviceaccount.com")
 CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 SM = "https://secretmanager.googleapis.com/v1"
@@ -53,7 +55,7 @@ def plan():
 
 def _grant(owner, name, member, roles):
     """Add member to each role on one secret (read-modify-write with the policy's etag)."""
-    url = f"{SM}/projects/{GCP_PROJECT}/secrets/{name}"
+    url = f"{SM}/projects/{SECRETS_PROJECT}/secrets/{name}"
     status, policy = owner("GET", f"{url}:getIamPolicy")
     if status != 200:
         raise RuntimeError(f"couldn't read who may use {name} (HTTP {status}: {policy.get('error', {}).get('message', '')})")
@@ -81,12 +83,12 @@ def run(token, http=None):
     report = {"granted": [], "already": [], "created": [], "missing": [], "enabled": [], "errors": []}
     for name, pasted in sorted(plan().items()):
         try:
-            status, _ = owner("GET", f"{SM}/projects/{GCP_PROJECT}/secrets/{name}")
+            status, _ = owner("GET", f"{SM}/projects/{SECRETS_PROJECT}/secrets/{name}")
             if status == 404:
                 if not pasted:
                     report["missing"].append(name)  # a key that should exist but doesn't: nothing to grant
                     continue
-                status, body = owner("POST", f"{SM}/projects/{GCP_PROJECT}/secrets", params={"secretId": name},
+                status, body = owner("POST", f"{SM}/projects/{SECRETS_PROJECT}/secrets", params={"secretId": name},
                                      json={"replication": {"automatic": {}}, "labels": {"managed-by": "chat-assistant"}})
                 if status != 200:
                     raise RuntimeError(f"couldn't create {name} (HTTP {status}: {body.get('error', {}).get('message', '')})")

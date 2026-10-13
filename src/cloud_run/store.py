@@ -21,6 +21,8 @@ import time
 from datetime import datetime, timezone
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+# Secrets can live in a different project from Firestore and Vertex AI.
+SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT") or GCP_PROJECT
 
 # What the assistant may do without asking, per category ("auto" or "ask").
 # "Tiered" autonomy: internal work runs on its own; anything that reaches
@@ -315,7 +317,7 @@ class SecretManagerSecrets:
         self._cache = {}
 
     def _path(self, secret_id):
-        return f"projects/{GCP_PROJECT}/secrets/{secret_id}"
+        return f"projects/{SECRETS_PROJECT}/secrets/{secret_id}"
 
     def get(self, secret_id):
         hit = self._cache.get(secret_id)

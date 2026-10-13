@@ -33,7 +33,7 @@ class Stop(Exception):
 def make_client():
     from google.cloud import secretmanager
 
-    project = os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
+    project = os.environ.get("SECRETS_PROJECT") or os.environ.get("GCP_PROJECT", "shp-ai-bot-2026")
     name = f"projects/{project}/secrets/{TOKEN_SECRET}/versions/latest"
     token = secretmanager.SecretManagerServiceClient().access_secret_version(name=name).payload.data.decode()
     return GoogleClient(credentials_from_json(token))

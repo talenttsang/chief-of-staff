@@ -7,6 +7,8 @@
 # Nothing here prints a secret.
 set -euo pipefail
 PROJECT=shp-ai-bot-2026
+# Where the app's secrets live; set SECRETS_PROJECT to keep them in another project.
+SECRETS_PROJECT=${SECRETS_PROJECT:-$PROJECT}
 REGION=us-central1
 SA=chat-assistant@$PROJECT.iam.gserviceaccount.com
 DEPLOYER=claude-sessions@$PROJECT.iam.gserviceaccount.com
@@ -25,27 +27,27 @@ gcloud iam service-accounts add-iam-policy-binding $SA --project $PROJECT \
   --member serviceAccount:$DEPLOYER --role roles/iam.serviceAccountUser --quiet >/dev/null
 
 for s in chat-assistant-oauth-client chat-assistant-user-token chat-assistant-run-token; do
-  gcloud secrets describe $s --project $PROJECT >/dev/null 2>&1 \
-    || gcloud secrets create $s --replication-policy automatic --project $PROJECT >/dev/null
-  gcloud secrets add-iam-policy-binding $s --project $PROJECT \
+  gcloud secrets describe $s --project $SECRETS_PROJECT >/dev/null 2>&1 \
+    || gcloud secrets create $s --replication-policy automatic --project $SECRETS_PROJECT >/dev/null
+  gcloud secrets add-iam-policy-binding $s --project $SECRETS_PROJECT \
     --member serviceAccount:$SA --role roles/secretmanager.secretAccessor --quiet >/dev/null
 done
 # The app writes the owner's token after sign-in and disables older versions.
-gcloud secrets add-iam-policy-binding chat-assistant-user-token --project $PROJECT \
+gcloud secrets add-iam-policy-binding chat-assistant-user-token --project $SECRETS_PROJECT \
   --member serviceAccount:$SA --role roles/secretmanager.secretVersionManager --quiet >/dev/null
 
 # AI partners: ChatGPT's key (and an Anthropic key, only if you use the Claude API instead of Vertex).
 for s in CHATGPT_API_KEY ANTHROPIC_API_KEY; do
-  if gcloud secrets describe $s --project $PROJECT >/dev/null 2>&1; then
-    gcloud secrets add-iam-policy-binding $s --project $PROJECT \
+  if gcloud secrets describe $s --project $SECRETS_PROJECT >/dev/null 2>&1; then
+    gcloud secrets add-iam-policy-binding $s --project $SECRETS_PROJECT \
       --member serviceAccount:$SA --role roles/secretmanager.secretAccessor --quiet >/dev/null
   fi
 done
 
-TOKEN=$(gcloud secrets versions access latest --secret chat-assistant-run-token --project $PROJECT 2>/dev/null || true)
+TOKEN=$(gcloud secrets versions access latest --secret chat-assistant-run-token --project $SECRETS_PROJECT 2>/dev/null || true)
 if [ -z "$TOKEN" ]; then
   TOKEN=$(openssl rand -hex 32)
-  printf %s "$TOKEN" | gcloud secrets versions add chat-assistant-run-token --data-file=- --project $PROJECT >/dev/null
+  printf %s "$TOKEN" | gcloud secrets versions add chat-assistant-run-token --data-file=- --project $SECRETS_PROJECT >/dev/null
 fi
 
 args=(--location $REGION --project $PROJECT --schedule "0 * * * *" --time-zone America/Toronto

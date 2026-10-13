@@ -1047,6 +1047,18 @@ class CloudSetupTests(unittest.TestCase):
         self.assertFalse(any("projects/shp-ai-bot-2026:setIamPolicy" in c[1] for c in cloud.calls))  # never project-wide
 
 
+    def test_setup_uses_the_secrets_project(self):
+        import cloud_setup
+
+        demo_paste_connector(self)
+        cloud = self.Cloud([])
+        with mock.patch.object(cloud_setup, "SECRETS_PROJECT", "other-secrets"):
+            cloud_setup.run("ya29.owner-token", http=cloud)
+        secret_calls = [c[1] for c in cloud.calls if "/secrets" in c[1]]
+        self.assertTrue(secret_calls)
+        self.assertTrue(all(c.startswith("projects/other-secrets/secrets") for c in secret_calls))
+        self.assertTrue(any(c[1].startswith("projects/shp-ai-bot-2026/services") for c in cloud.calls))  # APIs stay put
+
     def test_logins_are_used_on_the_server_only(self):
         import integrations
 
