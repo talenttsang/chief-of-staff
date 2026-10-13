@@ -184,6 +184,13 @@ most (open tabs live in its memory, closed after 10 idle minutes; at most 4), sc
 runs as `web-browser@helperexpress-hk.iam.gserviceaccount.com`, which holds **no** roles, and only Talent Solutions AI's
 service account may call it. Talent Solutions AI finds it through `BROWSER_URL`; without it the tool isn't offered.
 
+**Test accounts.** `browser` with `action=sign_in` and an account (`BROWSER_ACCOUNTS`: `helperxpress-helper`,
+`helperxpress-employer`) signs in to HelperXpress through its `/test-login` page, so it can check signed-in
+pages after a change, even working alone. The app's server fills the login from the `BROWSER_ACCOUNTS` secret;
+the model never sees it. The accounts are "Test Helper" and "Test Employer (Talent Solutions AI)"; the test
+helper is left out of every employer's search. HelperXpress's key is `TEST_LOGIN_KEY`; rotate it by adding new
+versions of both secrets.
+
 Guards in the service itself, whatever the model asks:
 - only http(s) to public addresses: localhost, private and link-local ranges (the metadata server), and
   `*.internal` / `*.local` are blocked for the page and every request it makes, names resolving to them too;

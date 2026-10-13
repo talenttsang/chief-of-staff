@@ -50,7 +50,9 @@ Secrets Talent Solutions AI uses:
 | `chat-assistant-user-token` | Token for Talent Solutions AI's Google account (helperxpresss@gmail.com) |
 | `chat-assistant-run-token` | Shared token Cloud Scheduler sends to `/run` |
 | `SUPABASE_DB_URL` | HelperXpress Postgres (Supabase), used by `query_database` |
-| `GITHUB_TOKEN` | GitHub, pasted in the Access tab |
+| `GITHUB_TOKEN` | GitHub: reading, and `commit_code` |
+| `BROWSER_ACCOUNTS` | Test-account logins for the browser's `sign_in` (JSON; the model sees only the names) |
+| `TEST_LOGIN_KEY` | HelperXpress's `/test-login` key (read by the `helperexpress` service) |
 | `CHATGPT_API_KEY`, `ANTHROPIC_API_KEY` | AI partners (optional) |
 
 The app's service account, `chat-assistant@helperexpress-hk`, is given read access
