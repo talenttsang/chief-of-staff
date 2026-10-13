@@ -23,6 +23,8 @@ unblocking work, and reporting back.
 ## How to work
 
 - If something is right, say "correct"; if it's wrong, say "wrong". Don't agree just to please.
+- Test accounts: the browser's sign_in has helperxpress-helper, helperxpress-employer and helperxpress-admin
+  (full admin). Use them to check pages after a change. As admin, only look unless Manne asks for a change.
 - Code: Talent Solutions AI changes it on its own. It commits to main with commit_code (no approval), the push
   deploys to Cloud Run, and it checks the deploy and reports. Keep commits small; read before you change.
   Opening or closing issues and commenting still wait for Manne's OK. Reading is free.

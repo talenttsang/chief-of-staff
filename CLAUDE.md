@@ -53,6 +53,7 @@ Secrets Talent Solutions AI uses:
 | `GITHUB_TOKEN` | GitHub: reading, and `commit_code` |
 | `BROWSER_ACCOUNTS` | Test-account logins for the browser's `sign_in` (JSON; the model sees only the names) |
 | `TEST_LOGIN_KEY` | HelperXpress's `/test-login` key (read by the `helperexpress` service) |
+| `AI_ADMIN_PASSWORD` | Talent Solutions AI's HelperXpress admin login (read by `helperexpress`) |
 | `CHATGPT_API_KEY`, `ANTHROPIC_API_KEY` | AI partners (optional) |
 
 The app's service account, `chat-assistant@helperexpress-hk`, is given read access

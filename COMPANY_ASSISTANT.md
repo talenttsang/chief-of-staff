@@ -185,11 +185,13 @@ runs as `web-browser@helperexpress-hk.iam.gserviceaccount.com`, which holds **no
 service account may call it. Talent Solutions AI finds it through `BROWSER_URL`; without it the tool isn't offered.
 
 **Test accounts.** `browser` with `action=sign_in` and an account (`BROWSER_ACCOUNTS`: `helperxpress-helper`,
-`helperxpress-employer`) signs in to HelperXpress through its `/test-login` page, so it can check signed-in
-pages after a change, even working alone. The app's server fills the login from the `BROWSER_ACCOUNTS` secret;
+`helperxpress-employer`, `helperxpress-admin`) signs in to HelperXpress, so it can check signed-in pages after a
+change, even working alone. The helper and employer go through `/test-login`; the admin through the normal admin
+login with its own password (`AI_ADMIN_PASSWORD`): full admin, but the audit trail names it
+`talent-solutions-ai`. The app's server fills the login from the `BROWSER_ACCOUNTS` secret;
 the model never sees it. The accounts are "Test Helper" and "Test Employer (Talent Solutions AI)"; the test
 helper is left out of every employer's search. HelperXpress's key is `TEST_LOGIN_KEY`; rotate it by adding new
-versions of both secrets.
+versions of both secrets (the same for `AI_ADMIN_PASSWORD`).
 
 Guards in the service itself, whatever the model asks:
 - only http(s) to public addresses: localhost, private and link-local ranges (the metadata server), and
