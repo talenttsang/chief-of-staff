@@ -831,7 +831,9 @@ function renderBrowser() {
     return el("div", { class: `screen${v.device === "mobile" ? " phone" : ""}`, "data-id": v.id, "data-at": v.at },
       el("div", { class: "top" },
         el("b", {}, partnerInfo((v.caller || "").split(" ")[0]).label || v.caller),
-        /\((task|voice)\)/.test(v.caller || "") ? el("span", {}, /task/.test(v.caller) ? "· 處理任務中" : "· 通話中") : null,
+        /\((task|voice)\)/.test(v.caller || "") ? el("span", {}, /task/.test(v.caller)
+          ? `· 處理任務${(state?.tasks || []).find((t) => t.id === v.task_id)?.title ? `：${state.tasks.find((t) => t.id === v.task_id).title}` : "中"}`
+          : "· 通話中") : null,
         isLiveView(v) ? el("span", { class: "live" }, "即時") : el("span", {}, v.closed ? "已關閉" : "閒置"),
         el("span", {}, `· ${BROWSER_STEP[v.action] || v.action}`),
         el("span", { class: "when" }, ago(v.at)),

@@ -514,6 +514,12 @@ class Toolset:
         meta = data.get("metadata") or {}
         return {"url": url, "title": meta.get("title"), "text": (data.get("markdown") or "")[:9000]}
 
+    @property
+    def _tab(self):
+        """Tasks worked side by side each get their own tab, so one signing in as the helper doesn't sign the other
+        (the employer) out."""
+        return f"{self.caller} {self.task_id}" if self.task_id else self.caller
+
     def _show_screen(self, action, out, image):
         """Keep the latest screen for the Browser tab, so people can watch what the AI is doing."""
         try:
@@ -522,7 +528,9 @@ class Toolset:
             view.update({k: out[k] for k in ("url", "title", "device") if out.get(k)})
             if image:
                 view["image"] = image
-            self.store.save_browser_view(self.caller, view)
+            if self.task_id:
+                view["task_id"] = self.task_id
+            self.store.save_browser_view(self._tab, view)
         except Exception as exc:  # noqa: BLE001 - the screen is a courtesy; the browser call already worked
             print(f"browser view not saved: {exc!r}")
 
@@ -550,7 +558,7 @@ class Toolset:
             if "error" in login:
                 return login
             body.update(url=login["url"], fields=login["fields"], submit=login.get("submit") or "")
-        sessions = _browser_sessions.setdefault(self.caller, {})
+        sessions = _browser_sessions.setdefault(self._tab, {})
         if action != "open" and sessions.get("id") and time.time() - sessions.get("at", 0) < 600:
             body["session"] = sessions["id"]
         result = _browser_call({k: v for k, v in body.items() if v not in (None, "")})
@@ -622,7 +630,7 @@ class Toolset:
         return {"partner": partner, "answer": self.consult(partner, request)}
 
 
-_browser_sessions = {}  # caller -> {"id", "at"}: one browser tab per conversation partner, kept 10 minutes
+_browser_sessions = {}  # tab -> {"id", "at"}: one browser tab per partner, and per task being worked, kept 10 minutes
 _browser_token = {"value": "", "at": 0}
 _browser_token_lock = threading.Lock()
 

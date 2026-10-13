@@ -82,6 +82,21 @@ class BrowserToolTests(unittest.TestCase):
         self.assertEqual([c["action"] for c in self.calls], ["open", "type", "press", "select"])
         self.assertIn("never enter card or bank details", tools.SPECS[[n for n, _, _ in tools.SPECS].index("browser")][1])
 
+    def test_tasks_worked_side_by_side_get_their_own_tabs(self):
+        opened = iter(["tab-helper", "tab-employer"])
+        tools._browser_call.side_effect = lambda body: dict(copy.deepcopy(PAGE), session=body.get("session") or next(opened))
+        store = MemoryStore()
+        helper = Toolset(store, None, caller="assistant (task)", may_change=False)
+        employer = Toolset(store, None, caller="assistant (task)", may_change=False)
+        helper.task_id, employer.task_id = "t-helper", "t-employer"
+        helper.call("browser", {"action": "open", "url": "https://example.com"})
+        employer.call("browser", {"action": "open", "url": "https://example.com"})
+        helper.call("browser", {"action": "click", "x": 1, "y": 1})
+        employer.call("browser", {"action": "click", "x": 1, "y": 1})
+        sessions = [c[0][0].get("session") for c in tools._browser_call.call_args_list[2:]]
+        self.assertEqual(sessions, ["tab-helper", "tab-employer"])  # each task keeps its own tab
+        self.assertEqual(sorted(v["task_id"] for v in store.list_browser_views()), ["t-employer", "t-helper"])
+
     def test_a_live_call_gets_a_description_instead(self):
         import partner_gemini
 
