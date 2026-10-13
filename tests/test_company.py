@@ -85,6 +85,16 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(self.store.get_item("questions", q["id"])["status"], "answered")
         self.assertIn("Ryan", self.tools.call("company_overview", {})["overview"])
 
+    def test_irrelevant_questions_can_be_removed_with_their_answers(self):
+        q = self.tools.call("ask_owner", {"question": "Which salon does Kathy run?", "why": "old app"})
+        self.tools.call("answer_question", {"question_id": q["id"], "answer": "Dufferin"})
+        keep = knowledge.add_fact(self.store, "HelperXpress launched in 2026")
+        result = self.tools.call("delete_question", {"question_id": q["id"]})
+        self.assertEqual((result["deleted"], result["answer_facts_removed"]), (True, 1))
+        self.assertIsNone(self.store.get_item("questions", q["id"]))
+        self.assertEqual([f["id"] for f in self.store.list_items("facts")], [keep["id"]])
+        self.assertIn("error", self.tools.call("delete_question", {"question_id": q["id"]}))
+
     def test_tasks_systems_status_autopilot(self):
         t = self.tools.call("create_task", {"title": "Call SkuVault", "priority": "high"})["task"]
         self.tools.call("update_task", {"task_id": t["id"], "status": "done"})
@@ -161,6 +171,7 @@ class TalkTests(unittest.TestCase):
         tools = self.fake["claude"].calls[-1]["tools"]
         self.assertNotIn("set_autopilot", tools)
         self.assertNotIn("consult_partner", tools)
+        self.assertNotIn("delete_question", tools)
         self.assertIn("consulted by the company's AI assistant", self.fake["claude"].calls[-1]["system"])
 
     def test_partners_switch_off(self):

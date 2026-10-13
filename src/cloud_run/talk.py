@@ -128,7 +128,7 @@ class Talk:
             if not ok:
                 return f"({PARTNERS[partner].LABEL} isn't available: {why})"
             toolset = Toolset(self.store, self._google(), caller=partner, secrets=self.secrets, may_change=False,
-                              exclude=("set_autopilot", "consult_partner", "commit_code"))
+                              exclude=("set_autopilot", "consult_partner", "commit_code", "delete_question"))
             result = PARTNERS[partner].respond(
                 system_prompt(self.store, partner, consulted=True, owner_email=self.owner_email),
                 [{"role": "user", "text": f"Request from the {caller}: {request}"}],

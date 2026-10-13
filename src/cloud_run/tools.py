@@ -76,6 +76,9 @@ SPECS = [
            "priority": {**_I, "description": "1 urgent, 2 normal, 3 later"}}, ["question", "why"])),
     ("answer_question", "Record the owner's answer to a queued question (use when they answer it in conversation).",
      _obj({"question_id": _S, "answer": _S}, ["question_id", "answer"])),
+    ("delete_question", "Remove a question that isn't relevant (e.g. about another app or business), answered or "
+     "not. Its recorded answer goes too, unless keep_answer=true. Say which ones you removed and why.",
+     _obj({"question_id": _S, "keep_answer": _B}, ["question_id"])),
     ("list_tasks", "List board tasks. Filter by status, by 'mine' (owner's own tasks) or by a text query.",
      _obj({"status": _S, "mine": _B, "query": _S})),
     ("create_task", "Add a task to the board.", _obj(_TASK_FIELDS, ["title"])),
@@ -252,6 +255,19 @@ class Toolset:
         items.sort(key=lambda q: (q.get("priority", 2), q.get("created_at", "")))
         return {"questions": [{k: q.get(k) for k in ("id", "question", "why", "priority", "project_id", "answer")}
                               for q in items[:30]]}
+
+    def _t_delete_question(self, question_id, keep_answer=False):
+        q = self.store.get_item("questions", question_id)
+        if not q:
+            return {"error": "no such question"}
+        self.store.delete_item("questions", question_id)
+        removed = 0
+        if not keep_answer:  # answer_question saved the answer as a fact "Q: ... A: ..."
+            for fact in self.store.list_items("facts"):
+                if fact.get("text", "").startswith(f"Q: {q.get('question', '')} A: "):
+                    self.store.delete_item("facts", fact["id"])
+                    removed += 1
+        return {"deleted": True, "question": q.get("question", "")[:200], "answer_facts_removed": removed}
 
     def _t_ask_owner(self, question, why, project_id="", priority=2):
         q = knowledge.add_question(self.store, question, why, project_id, priority, source=f"{self.caller} conversation")

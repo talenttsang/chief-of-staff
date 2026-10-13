@@ -31,6 +31,8 @@ not be the owner. The models ask who it is when it matters (an approval, a fact 
 - **Company background**: `src/cloud_run/knowledge/company.md`, given to every model. Keep it current there.
 - **Conversations and answers**: the models record what they learn with tools (`save_project`,
   `record_fact`, `ask_owner`, `request_access`, ...).
+- **Clearing out**: `delete_question` removes a question that isn't relevant (e.g. about another app),
+  answered or not, together with its recorded answer.
 - It starts with the round-1 interview questions and the known systems list, seeded once.
 
 ## What it may do on its own (tiered autonomy)
