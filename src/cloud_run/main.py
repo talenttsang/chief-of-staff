@@ -1,10 +1,12 @@
 """Chat Assistant: a project board that an AI keeps current from your Google Chat.
 
 Routes
-  GET  /                 the board (sign-in page when signed out)
-  GET  /login            Google sign-in; ?connect=1 also grants the assistant's Chat/Calendar access
+  GET  /                 the board (the password page when signed out)
+  POST /login            sign in with the password
+  GET  /connect/google   connect Man AI's Google account (GOOGLE_ACCOUNT): Gmail, Calendar, Drive, ...
   GET  /oauth/callback   OAuth redirect target
   POST /logout
+  POST /api/password     change the password (everyone else is signed out)
   GET  /api/state        tasks, activity, runs, settings, connection status
   GET  /api/progress     live progress of the running (or last) pass
   POST/PATCH/DELETE /api/tasks[/<id>]
@@ -13,8 +15,13 @@ Routes
   POST /api/run          run now (from the UI)
   POST /run              hourly run (Cloud Scheduler, X-Run-Token header)
 
-Only OWNER_EMAIL can sign in. The owner's Google token lives in Secret Manager
-(chat-assistant-user-token), readable only by this service's own service account.
+Sign-in is one shared password, kept in Secret Manager (chat-assistant-password); there is no Google
+sign-in. A browser stays signed in for SESSION_DAYS after its last visit, until the password changes.
+Wrong passwords are limited per address and overall (LOGIN_LIMITS).
+
+Man AI's Google account (GOOGLE_ACCOUNT) is connected once with Connect Google; its token lives in
+Secret Manager (chat-assistant-user-token), readable only by this service's own service account. A
+token from any other account is ignored.
 """
 
 import hmac
@@ -22,7 +29,9 @@ import json
 import re
 import os
 import secrets as pysecrets
+import time
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, redirect, render_template, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -31,7 +40,8 @@ import assistant
 import integrations
 import knowledge
 import worker
-from google_apis import ASSISTANT_SCOPES, IDENTITY_SCOPES, GoogleClient, credentials_from_json, naive_utc_expiry
+from google_apis import (ASSISTANT_SCOPES, GOOGLE_CHAT, IDENTITY_SCOPES, GoogleClient, credentials_from_json,
+                         naive_utc_expiry)
 from store import AUTONOMY_CATEGORIES, make_secrets, make_store, utcnow_iso
 from talk import PARTNERS, Talk
 
@@ -39,13 +49,21 @@ from talk import PARTNERS, Talk
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "manne@superhairpieces.com").lower()
+# The Google account Man AI reads Gmail, Calendar and Drive as. Connect Google accepts only this one.
+GOOGLE_ACCOUNT = os.environ.get("GOOGLE_ACCOUNT", OWNER_EMAIL).lower()
+PASSWORD_SECRET_ID = os.environ.get("PASSWORD_SECRET_ID", "chat-assistant-password")
+SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "365"))
+# Wrong passwords: (how many, within seconds) from one address, and from everywhere together.
+LOGIN_LIMITS = {"address": (5, 15 * 60), "everyone": (30, 60 * 60)}
 OWNER_DOMAIN = OWNER_EMAIL.split("@")[-1]
+# Google's sign-in can be limited to a Workspace domain; a Gmail address has none to limit to.
+HOSTED_DOMAIN = {} if OWNER_DOMAIN in ("gmail.com", "googlemail.com") else {"hd": OWNER_DOMAIN}
 OAUTH_CLIENT_SECRET_ID = os.environ.get("OAUTH_CLIENT_SECRET_ID", "chat-assistant-oauth-client")
 USER_TOKEN_SECRET_ID = os.environ.get("USER_TOKEN_SECRET_ID", "chat-assistant-user-token")
 CHATGPT_VOICE = os.environ.get("CHATGPT_VOICE", "realtime")  # realtime (ChatGPT hears you) | relay (via Gemini)
 CLAUDE_VOICE = os.environ.get("CLAUDE_VOICE", "realtime")  # realtime (ChatGPT's voice line) | gemini (Gemini's)
 RUN_TOKEN_SECRET_ID = os.environ.get("RUN_TOKEN_SECRET_ID", "chat-assistant-run-token")
-PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")  # the one address pages are served from (see one_address)
 CSRF_HEADER = "X-Chat-Assistant"
 LOCAL = os.environ.get("STORE_BACKEND") == "memory"
 # Cloud Run names every deploy (K_REVISION); open pages reload themselves when it changes.
@@ -62,13 +80,22 @@ app.config.update(
     SESSION_COOKIE_SECURE=not LOCAL,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    PERMANENT_SESSION_LIFETIME=timedelta(days=14),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=SESSION_DAYS),  # renewed on every visit
 )
 
 
-def make_google():
-    """The owner's Google client, or None before they've connected."""
+def google_token():
+    """The stored Google token, if it's GOOGLE_ACCOUNT's (an earlier account's token is left unused)."""
     token = secret_store.get(USER_TOKEN_SECRET_ID)
+    if not token:
+        return None
+    connected_as = ((store.get_owner() or {}).get("email") or "").lower()
+    return token if not GOOGLE_ACCOUNT or connected_as == GOOGLE_ACCOUNT else None
+
+
+def make_google():
+    """Man AI's Google client, or None before GOOGLE_ACCOUNT is connected."""
+    token = google_token()
     return GoogleClient(credentials_from_json(token)) if token else None
 
 
@@ -85,8 +112,46 @@ app.config["MAKE_LLM"] = make_llm
 
 # -- access control ----------------------------------------------------------------
 
+def password():
+    return (secret_store.get(PASSWORD_SECRET_ID) or "").strip()
+
+
+def password_mark(value):
+    """What a signed-in browser's cookie holds: tied to this password (a new one signs everyone out), and keyed
+    with the app's secret so the cookie doesn't give the password away."""
+    return hmac.new(app.secret_key.encode(), f"password:{value}".encode(), "sha256").hexdigest()[:32]
+
+
 def signed_in():
-    return session.get("email") == OWNER_EMAIL
+    current = password()
+    return bool(current) and hmac.compare_digest(session.get("signed_in", ""), password_mark(current))
+
+
+def client_address():
+    # Google's front end appends the caller's address last; anything before it the caller could have sent.
+    forwarded = request.headers.get("X-Forwarded-For", "").split(",")[-1].strip()
+    return forwarded or request.remote_addr or "?"
+
+
+def login_wait(address, now):
+    """Seconds until another try is allowed, or 0."""
+    failures = store.login_failures()
+    waits = []
+    for scope, (limit, window) in LOGIN_LIMITS.items():
+        recent = [f["at"] for f in failures if f.get("at", 0) > now - window
+                  and (scope == "everyone" or f.get("ip") == address)]
+        if len(recent) >= limit:
+            waits.append(int(sorted(recent)[-limit] + window - now) + 1)
+    return max(waits, default=0)
+
+
+@app.before_request
+def one_address():
+    """Cloud Run answers on two addresses, and a sign-in cookie belongs to one: send pages opened on the other
+    to PUBLIC_URL."""
+    if PUBLIC_URL and request.method == "GET" and request.path != "/health":
+        if request.host.lower() != urlsplit(PUBLIC_URL).netloc.lower():
+            return redirect(PUBLIC_URL + request.full_path.rstrip("?"), 302)
 
 
 @app.before_request
@@ -126,26 +191,53 @@ def make_flow(scopes, state=None):
 
 
 def login_page(error="", status=200):
-    return render_template("login.html", error=error, owner=OWNER_EMAIL,
-                           configured=bool(oauth_client_config()), redirect_uri=redirect_uri()), status
+    return render_template("login.html", error=error, configured=bool(password()),
+                           secret=PASSWORD_SECRET_ID), status
+
+
+def oauth_error(message, status=400):
+    """A Google connection that didn't work, on the board's own address."""
+    return render_template("login.html", error=message, configured=True, secret=PASSWORD_SECRET_ID,
+                           back=True), status
 
 
 @app.get("/")
 def index():
     if not signed_in():
         return login_page()
-    return render_template("index.html", owner=OWNER_EMAIL, version=APP_VERSION)
+    return render_template("index.html", version=APP_VERSION)
 
 
-@app.get("/login")
+@app.post("/login")
 def login():
+    current = password()
+    if not current:
+        return login_page(status=503)
+    now, address = time.time(), client_address()
+    wait = login_wait(address, now)
+    if wait:
+        return login_page(f"Too many wrong passwords. Try again in {max(1, round(wait / 60))} min.", 429)
+    if not hmac.compare_digest(request.form.get("password", "").strip().encode(), current.encode()):
+        store.add_login_failure(address, now)
+        return login_page("That's not the password.", 401)
+    session.clear()
+    session.permanent = True
+    session["signed_in"] = password_mark(current)
+    return redirect("/")
+
+
+@app.get("/connect/google")
+def connect_google():
+    """Connect Man AI's Google account (GOOGLE_ACCOUNT): offline, every scope it uses."""
+    if not signed_in():
+        return redirect("/")
     if not oauth_client_config():
-        return login_page()
-    connect = request.args.get("connect") == "1" or not secret_store.get(USER_TOKEN_SECRET_ID)
-    flow = make_flow(ASSISTANT_SCOPES if connect else IDENTITY_SCOPES)
-    extra = {"prompt": "consent", "access_type": "offline"} if connect else {"prompt": "select_account"}
-    url, state = flow.authorization_url(login_hint=OWNER_EMAIL, hd=OWNER_DOMAIN, **extra)
-    session["oauth"] = {"state": state, "verifier": flow.code_verifier, "connect": connect,
+        return oauth_error(f"The Google client isn't set up yet: store its JSON in Secret Manager as "
+                           f"{OAUTH_CLIENT_SECRET_ID} (redirect URI {redirect_uri()}).", 503)
+    flow = make_flow(ASSISTANT_SCOPES)
+    url, state = flow.authorization_url(prompt="consent", access_type="offline",
+                                        **({"login_hint": GOOGLE_ACCOUNT} if GOOGLE_ACCOUNT else {}))
+    session["oauth"] = {"state": state, "verifier": flow.code_verifier, "connect": True,
                         "back": "access" if request.args.get("back") == "access" else ""}
     return redirect(url)
 
@@ -156,12 +248,12 @@ def connect_setup():
     import cloud_setup
 
     if not signed_in():
-        return redirect("/login")
+        return redirect("/")
     if not oauth_client_config():
-        return login_page()
+        return oauth_error(f"The Google client isn't set up yet ({OAUTH_CLIENT_SECRET_ID}).", 503)
     flow = make_flow(IDENTITY_SCOPES + [cloud_setup.CLOUD_SCOPE])
     # online: only a one-hour token, no refresh token (the library asks for offline unless told otherwise)
-    url, state = flow.authorization_url(login_hint=OWNER_EMAIL, hd=OWNER_DOMAIN, access_type="online")
+    url, state = flow.authorization_url(login_hint=OWNER_EMAIL, **HOSTED_DOMAIN, access_type="online")
     then = request.args.get("then", "")
     session["oauth"] = {"state": state, "verifier": flow.code_verifier, "connect": False, "mode": "setup",
                         "then": then if re.fullmatch(r"[a-z0-9_]{1,40}", then) else ""}
@@ -170,11 +262,13 @@ def connect_setup():
 
 @app.get("/oauth/callback")
 def oauth_callback():
+    if not signed_in():
+        return redirect("/")
     pending = session.pop("oauth", None)
     if request.args.get("error"):
-        return login_page(f"Google sign-in was cancelled ({request.args['error']}).", 400)
+        return oauth_error(f"Google was cancelled ({request.args['error']}).")
     if not pending or not hmac.compare_digest(request.args.get("state", ""), pending["state"]):
-        return login_page("That sign-in link expired. Please try again.", 400)
+        return oauth_error("That Google link expired. Please try again.")
 
     from google.auth.transport.requests import Request
     from google.oauth2 import id_token
@@ -182,7 +276,7 @@ def oauth_callback():
     import cloud_setup
 
     setup = pending.get("mode") == "setup"
-    scopes = IDENTITY_SCOPES + [cloud_setup.CLOUD_SCOPE] if setup else ASSISTANT_SCOPES if pending["connect"] else IDENTITY_SCOPES
+    scopes = IDENTITY_SCOPES + [cloud_setup.CLOUD_SCOPE] if setup else ASSISTANT_SCOPES
     flow = make_flow(scopes, state=pending["state"])
     flow.code_verifier = pending["verifier"]
     try:
@@ -190,15 +284,16 @@ def oauth_callback():
         creds = naive_utc_expiry(flow.credentials)
         claims = id_token.verify_oauth2_token(creds.id_token, Request(), flow.client_config["client_id"])
     except Exception as exc:  # noqa: BLE001 - shown to the user, who can retry
-        return login_page(f"Sign-in failed: {exc}", 400)
+        return oauth_error(f"Google said no: {exc}")
 
     email = (claims.get("email") or "").lower()
-    if email != OWNER_EMAIL or not claims.get("email_verified"):
-        return login_page(f"{email or 'That account'} can't use this assistant. Sign in as {OWNER_EMAIL}.", 403)
-
-    session.clear()
-    session.permanent = True
-    session["email"] = email
+    if not claims.get("email_verified"):
+        return oauth_error(f"Google hasn't verified {email or 'that account'}'s email address.", 403)
+    # Connect everything acts as whoever owns the Cloud project (Google checks what that account may do);
+    # Man AI's own Google access must be GOOGLE_ACCOUNT's.
+    if pending["connect"] and GOOGLE_ACCOUNT and email != GOOGLE_ACCOUNT:
+        return oauth_error(f"That was {email}. Connect Google as {GOOGLE_ACCOUNT}: press Connect again and pick "
+                           "that account (or \"Use another account\").", 403)
 
     if setup:
         # The owner's token is used here and dropped: nothing about it is stored.
@@ -209,8 +304,8 @@ def oauth_callback():
 
     if pending["connect"]:
         if not creds.refresh_token:
-            return login_page("Google didn't return long-term access. Remove the app at "
-                              "myaccount.google.com/permissions and connect again.", 400)
+            return oauth_error("Google didn't return long-term access. Remove the app at "
+                               "myaccount.google.com/permissions and connect again.")
         granted = flow.oauth2session.token.get("scope") or []
         granted = set(granted.split() if isinstance(granted, str) else granted)
         missing = sorted(s.rsplit("/", 1)[-1] for s in ASSISTANT_SCOPES if s not in granted and s != "openid")
@@ -223,6 +318,21 @@ def oauth_callback():
 @app.post("/logout")
 def logout():
     session.clear()
+    return jsonify(ok=True)
+
+
+@app.post("/api/password")
+def api_password():
+    """Change the password. This browser stays signed in; every other one is signed out."""
+    new = str((request.get_json(force=True) or {}).get("password", "")).strip()
+    if len(new) < 4 or len(new) > 200:
+        return jsonify(error="Use 4 to 200 characters. Longer is safer: a few words are hard to guess."), 400
+    try:
+        secret_store.put(PASSWORD_SECRET_ID, new)
+    except Exception as exc:  # noqa: BLE001 - the app may not have been allowed to change it
+        print(f"password change failed: {type(exc).__name__}")
+        return jsonify(error=f"Couldn't save it ({type(exc).__name__})."), 502
+    session["signed_in"] = password_mark(new)
     return jsonify(ok=True)
 
 
@@ -250,12 +360,13 @@ def _clean_task(body):
 @app.get("/api/state")
 def api_state():
     status = store.get_status()
-    token = secret_store.get(USER_TOKEN_SECRET_ID)
+    token = google_token()
     if token:  # a permission added since the last sign-in (e.g. starting direct messages) needs one Reconnect
         status["missing_scopes"] = sorted(set(status.get("missing_scopes") or []) | set(scopes_missing_from(token)))
     return jsonify(
         version=APP_VERSION,
         owner=OWNER_EMAIL,
+        google_account=GOOGLE_ACCOUNT,
         connected=bool(token),
         status=status,
         settings=store.get_settings(),
@@ -680,7 +791,10 @@ def do_run(trigger):
         google = app.config["MAKE_GOOGLE"]()
         if not google:
             raise assistant.ReconnectNeeded("Google isn't connected yet.")
-        summary = assistant.run(store, google, app.config["MAKE_LLM"](), progress=progress)
+        if GOOGLE_CHAT:
+            summary = assistant.run(store, google, app.config["MAKE_LLM"](), progress=progress)
+        else:  # no Google Chat (a Gmail owner): the run works the assistant's tasks and checks the systems
+            summary = assistant.empty_summary()
         summary["trigger"] = trigger
         progress.phase("Working on the assistant's own tasks")
         try:

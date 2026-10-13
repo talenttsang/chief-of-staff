@@ -7,6 +7,9 @@ Three ways a system gets connected (the Access tab's Connect buttons):
   Manne pastes the key in the app, and it goes straight into Secret Manager. (No
   connector uses this right now; HubSpot and Re:amaze did until they were retired.)
 - "google": a Google API, used with Manne's own sign-in (the scopes are part of it).
+- "self": a Google API used as the app's own service account (SERVICE_ACCOUNT): it
+  reads what people share with that address (a Drive folder, a calendar). No sign-in,
+  no key, nothing that expires: Cloud Run hands the app its tokens.
 
 The assistant reads chats written by many people, so any of them could try to talk
 it into misusing a key. The rules that make that fail:
@@ -31,6 +34,9 @@ import requests
 MAX_RESPONSE_CHARS = 10000
 TEAMDESK_DATABASE_ID = os.environ.get("TEAMDESK_DATABASE_ID", "56554")  # as trustpilot-pipeline uses
 TRUSTPILOT_BU = "5e44f707d7d8c700011eaa10"  # our Trustpilot business unit, from trustpilot-pipeline
+# The app's own Google identity: share a Drive folder or a calendar with this address and Man AI can read it.
+SERVICE_ACCOUNT = os.environ.get("SERVICE_ACCOUNT_EMAIL") or \
+    f"chat-assistant@{os.environ.get('GCP_PROJECT', 'helperexpress-hk')}.iam.gserviceaccount.com"
 READ_METHODS = {"GET", "HEAD"}
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -52,7 +58,8 @@ class Integration:
     read_posts: tuple = ()        # POST paths (regex) that only read, e.g. a search
     system_id: str = ""           # its row in the Access tab
     category: str = "Other"
-    kind: str = "key"             # key | paste | google (see the module docstring)
+    kind: str = "key"             # key | paste | google | self (see the module docstring)
+    scopes: list = field(default_factory=list)  # self: the Google scopes its tokens carry
     fields: list = field(default_factory=list)  # paste: [(secret, label, placeholder, hidden)]
     help: str = ""                # paste: where to find the key, step by step
     exchange: object = None       # callable(values, http) -> {"headers"|"body": {...}, "ttl": s}: a login -> token
@@ -328,7 +335,7 @@ REGISTRY += [  # research
         hint=('Used by web_search and read_webpage. Directly: POST /v1/search {"query": "...", "limit": 5}, '
               'POST /v1/scrape {"url": "...", "formats": ["markdown"], "onlyMainContent": true}, '
               'POST /v1/map {"url": "https://site"} (a site\'s pages). All are reads.'),
-        probe=("POST", "/v1/search", {"query": "superhairpieces", "limit": 1}),
+        probe=("POST", "/v1/search", {"query": "github", "limit": 1}),
         read_posts=(r"^/v1/(search|scrape|map)$",), system_id="web_research", category="Research"),
     Integration(
         id="dataforseo", label="SEO research (DataForSEO)", secrets=["DATAFORSEO_LOGIN", "DATAFORSEO_API_TOKEN"],
@@ -383,8 +390,79 @@ GOOGLE.append(Integration(
     probe="/accounts/v1/accounts/5298296396", system_id="merchant_center", category="Marketing",
     services=["merchantapi.googleapis.com"]))
 REGISTRY += GOOGLE
+
+OWN = [  # read as the app's own service account: what people share with SERVICE_ACCOUNT, no one's sign-in
+    Integration(
+        id="shared_drive", label="Drive shared with Man AI", secrets=[], base="https://www.googleapis.com",
+        kind="self", scopes=["https://www.googleapis.com/auth/drive.readonly"],
+        hint=(f"Files and folders people shared with Man AI's own address, {SERVICE_ACCOUNT}. Read-only. "
+              "GET /drive/v3/files with query {\"q\": \"sharedWithMe\", \"fields\": \"files(id,name,mimeType,"
+              "modifiedTime,owners(emailAddress),webViewLink)\"} lists what's shared; a folder's contents: query "
+              "{\"q\": \"'FOLDER_ID' in parents\", \"fields\": ...}. A Google Doc as text: "
+              "/drive/v3/files/{id}/export?mimeType=text/plain (a Sheet's first tab: mimeType=text/csv); "
+              "other files: /drive/v3/files/{id}?alt=media. A 404 means it isn't shared with Man AI."),
+        probe="/drive/v3/about?fields=user", system_id="shared_drive", category="Documents",
+        services=["drive.googleapis.com"]),
+    Integration(
+        id="shared_calendar", label="Calendars shared with Man AI", secrets=[], base="https://www.googleapis.com",
+        kind="self", scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+        hint=(f"Calendars people shared with Man AI's own address, {SERVICE_ACCOUNT}. Read-only. A shared "
+              "calendar isn't listed anywhere: read it by its id, which for someone's main calendar is their email "
+              "with @ written as %40: GET /calendar/v3/calendars/name%40gmail.com/events with query {\"timeMin\": "
+              "\"2026-10-13T00:00:00Z\", \"timeMax\": \"...\", \"singleEvents\": \"true\", \"orderBy\": "
+              "\"startTime\"}. Other calendars' ids are in their Google Calendar settings (Integrate calendar). "
+              "A 404 means it isn't shared with Man AI."),
+        probe="/calendar/v3/users/me/calendarList?maxResults=1", system_id="shared_calendar", category="Communication",
+        services=["calendar-json.googleapis.com"]),
+]
+REGISTRY += OWN
+
+REGISTRY += [  # engineering
+    Integration(
+        id="github", label="GitHub", secrets=["GITHUB_TOKEN"], base="https://api.github.com",
+        headers=lambda v: {"Authorization": f"Bearer {v['GITHUB_TOKEN']}", "Accept": "application/vnd.github+json",
+                           "X-GitHub-Api-Version": "2022-11-28"},
+        hint=("/user (whose token), /user/repos?sort=pushed&per_page=30, /repos/{owner}/{repo}, "
+              "/repos/{owner}/{repo}/issues?state=open&per_page=50, /repos/{owner}/{repo}/pulls?state=open, "
+              "/repos/{owner}/{repo}/pulls/{n}/files, /repos/{owner}/{repo}/commits?per_page=20, "
+              "/repos/{owner}/{repo}/actions/runs?per_page=10 (CI), /repos/{owner}/{repo}/contents/{path} (a file, "
+              "base64), /search/issues?q=repo:{owner}/{repo}+is:open+label:bug. Changes need Manne's OK: POST "
+              "/repos/{owner}/{repo}/issues {\"title\", \"body\"}, POST /repos/{owner}/{repo}/issues/{n}/comments "
+              "{\"body\"}, PATCH /repos/{owner}/{repo}/issues/{n} {\"state\": \"closed\"}."),
+        probe="/user", system_id="github", category="Engineering", kind="paste",
+        fields=[("GITHUB_TOKEN", "Personal access token (fine-grained)", "github_pat_…", True)],
+        help=("On GitHub, signed in as the account that owns the code: Settings > Developer settings > Personal "
+              "access tokens > Fine-grained tokens > Generate new token. Resource owner: that account. Repository "
+              "access: the HelperConnects and HelperXpress repositories. Permissions (Read): Contents, Issues, Pull "
+              "requests, Actions, Metadata; make Issues and Pull requests Read and write if Man AI may open issues or "
+              "comment after your OK. Generate, copy the token and paste it here.")),
+]
+
+# Which systems this deployment offers: ids in INTEGRATIONS, separated by ";" (gcloud --set-env-vars splits on
+# commas), "," or spaces; empty: all of them. A copy run for another business lists its own, so the Access tab,
+# the checks and the models see only those.
+ENABLED = {s for s in re.split(r"[;,\s]+", os.environ.get("INTEGRATIONS", "")) if s}
+if ENABLED:
+    REGISTRY = [i for i in REGISTRY if i.id in ENABLED]
 BY_ID = {i.id: i for i in REGISTRY}
 _exchanged = {}  # integration id -> (exchange result, expires at); logins aren't redone on every call
+_own_credentials = {}  # scopes -> the app's own credentials, refreshed when they run out
+
+
+def _own_token(scopes):
+    """An access token for the app's own service account with these scopes (Cloud Run's metadata server issues
+    them, so there's nothing to store or renew)."""
+    import google.auth
+    from google.auth.transport.requests import Request
+
+    key = tuple(scopes)
+    creds = _own_credentials.get(key)
+    if creds is None:
+        creds, _ = google.auth.default(scopes=list(scopes))
+        _own_credentials[key] = creds
+    if not creds.valid:
+        creds.refresh(Request())
+    return creds.token
 
 
 def secret_names():
@@ -451,6 +529,8 @@ def call(integration_id, method, path, secrets, query=None, body=None, confirmed
             if google is None:
                 raise NotReady("Google isn't connected (press Connect in the banner at the top of the page)")
             headers.update(google.auth_header())
+        elif integration.kind == "self":
+            headers["Authorization"] = f"Bearer {_own_token(integration.scopes)}"
     except NotReady as exc:
         return {"error": f"{integration.label} isn't available: {exc}"}
     except Exception as exc:  # noqa: BLE001 - a failed login or token refresh, reported to the model
@@ -512,6 +592,8 @@ def probe(integration, secrets, session=None, google=None):
 def status(integration, secrets, google=None):
     if integration.kind == "google":
         return ("ready", "") if google is not None else ("no_access", "Google isn't connected")
+    if integration.kind == "self":
+        return "ready", ""  # whatever is shared with it; a 404 says what isn't
     try:
         integration.values(secrets)
         return "ready", ""

@@ -12,26 +12,27 @@
     p { color: var(--muted); margin: 0 0 20px; }
     .error { background: var(--bad-weak); color: var(--bad); padding: 10px 12px; border-radius: 8px; margin-bottom: 16px; }
     code { background: var(--panel-2); padding: 2px 6px; border-radius: 4px; word-break: break-all; }
-    ol { color: var(--muted); padding-left: 18px; }
-    li { margin-bottom: 6px; }
+    form { display: flex; gap: 8px; flex-wrap: wrap; }
+    input[type=password] { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--panel); color: var(--text); }
   </style>
 </head>
 <body>
 <main>
   <div class="card">
     <h1>Man AI</h1>
-    <p>Your AI head of digital transformation for Superhairpieces and Gen'C Beauty: it learns every project from your chats and from you, keeps the work moving, and acts for you.</p>
-    {% if error %}<div class="error">{{ error }}</div>{% endif %}
-    {% if configured %}
-      <a class="btn primary" href="/login">Sign in with Google</a>
-      <p style="margin-top:16px;font-size:13px">Only {{ owner }} can sign in.</p>
+    <p>Your AI chief of staff for HelperConnects and HelperXpress: it keeps every project and the code moving, learns from you, and acts for you.</p>
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    {% if back %}
+      <a class="btn primary" href="/?tab=access">Back to Man AI</a>
+    {% elif configured %}
+      <form method="post" action="/login">
+        <input type="password" name="password" aria-label="Password" placeholder="Password" autocomplete="current-password" required autofocus>
+        <button class="btn primary" type="submit">Sign in</button>
+      </form>
+      <p style="margin-top:16px;font-size:13px">You stay signed in on this browser.</p>
     {% else %}
-      <div class="error">The Google sign-in client isn't set up yet.</div>
-      <ol>
-        <li>Create an OAuth client of type <b>Web application</b> with this redirect URI:<br><code>{{ redirect_uri }}</code></li>
-        <li>Download its JSON and store it in Secret Manager as <code>chat-assistant-oauth-client</code>.</li>
-        <li>Re-run the <b>Chat assistant</b> GitHub Actions workflow, then reload this page.</li>
-      </ol>
+      <div class="error">No password is set yet. Store one in Secret Manager as <code>{{ secret }}</code>, then reload this page.</div>
     {% endif %}
   </div>
 </main>

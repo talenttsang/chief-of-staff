@@ -21,11 +21,12 @@ import time
 from datetime import datetime, timezone
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
-FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
-# Secrets live in a different project (talenttsang's) from Firestore and Vertex AI.
-SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT", "helperexpress-hk")
-if SECRETS_PROJECT == "shp-ai-bot-2026":  # never mannetsang's Secret Manager
+# Secrets come only from talenttsang's project, never mannetsang's.
+SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT") or GCP_PROJECT
+if SECRETS_PROJECT == "shp-ai-bot-2026":
     raise RuntimeError("SECRETS_PROJECT must not be shp-ai-bot-2026")
+# A named Firestore database keeps the app's data apart when it shares a project with another app.
+FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
 
 # What the assistant may do without asking, per category ("auto" or "ask").
 # "Tiered" autonomy: internal work runs on its own; anything that reaches
@@ -161,6 +162,14 @@ class MemoryStore:
 
     def set_owner(self, owner):
         self._set("chat_assistant", "owner", owner)
+
+    def login_failures(self):
+        """Recent wrong passwords: [{"ip", "at" (epoch seconds)}], newest last."""
+        return list((self._get("chat_assistant", "login_guard") or {}).get("failures", []))
+
+    def add_login_failure(self, ip, now, keep_seconds=3600):
+        recent = [f for f in self.login_failures() if f.get("at", 0) > now - keep_seconds][-300:]
+        self._set("chat_assistant", "login_guard", {"failures": recent + [{"ip": ip, "at": now}]})
 
     def set_status(self, changes):
         """Connection and last-run status shown in the UI header.
@@ -331,8 +340,10 @@ class SecretManagerSecrets:
         try:
             resp = self._client.access_secret_version(request={"name": f"{self._path(secret_id)}/versions/latest"})
             value = resp.payload.data.decode("utf-8").rstrip("\n")
-        except (exceptions.NotFound, exceptions.FailedPrecondition):
-            value = None  # secret missing, or no enabled version yet
+        except (exceptions.NotFound, exceptions.FailedPrecondition, exceptions.PermissionDenied):
+            # Missing, no enabled version yet, or not this app's to read (Secret Manager says "denied" for a
+            # secret that doesn't exist when the caller can't list secrets): all mean "not available".
+            value = None
         ttl = self.CACHE_SECONDS if value is not None else self.MISSING_CACHE_SECONDS
         self._cache[secret_id] = (value, time.time() + ttl)
         return value

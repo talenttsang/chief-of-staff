@@ -18,7 +18,7 @@ const SCOPE_LABEL = {
   "spreadsheets.readonly": "reading Sheets", "analytics.readonly": "Analytics", "webmasters.readonly": "Search Console",
   "content": "Merchant Center", "directory.readonly": "the company directory",
 };
-const COMPANY_LABEL = { superhairpieces: "Superhairpieces", gencbeauty: "Gen'C Beauty", both: "Both" };
+const COMPANY_LABEL = { helperconnects: "HelperConnects", helperxpress: "HelperXpress", both: "Both" };
 const SUGGESTIONS = [
   "Interview me: what do you most need to know?", "What do you know so far about the companies?",
   "Which systems do you need access to first, and how do I connect them?", "What's on my calendar this week?",
@@ -141,19 +141,19 @@ function renderBanners() {
   const box = $("banners"); box.replaceChildren();
   if (!state.connected) {
     box.append(el("div", { class: "banner" },
-      el("span", {}, el("b", {}, "Connect Google. "), "The assistant needs permission to read your chats, reply as you, see the company directory and add calendar events."),
-      el("a", { class: "btn primary", href: "/login?connect=1" }, "Connect")));
+      el("span", {}, el("b", {}, "Connect Google. "), `Man AI reads Gmail, Calendar and Drive as ${state.google_account || "your Google account"}. Press Connect and sign in to Google as that account.`),
+      el("a", { class: "btn primary", href: "/connect/google" }, "Connect")));
   } else if (state.status.connection_error) {
     box.append(el("div", { class: "banner bad" },
       el("span", {}, el("b", {}, "The assistant can't reach Google. "), state.status.connection_error),
-      el("a", { class: "btn primary", href: "/login?connect=1" }, "Reconnect")));
+      el("a", { class: "btn primary", href: "/connect/google" }, "Reconnect")));
   }
   if ((state.status.missing_scopes || []).length) {
     const what = state.status.missing_scopes.map((s) => SCOPE_LABEL[s] || s);
     box.append(el("div", { class: "banner" },
       el("span", {}, el("b", {}, "Man AI needs your OK in Google for: "), what.join(", "),
         ". Press Reconnect and allow everything Google asks."),
-      el("a", { class: "btn primary", href: "/login?connect=1" }, "Reconnect")));
+      el("a", { class: "btn primary", href: "/connect/google" }, "Reconnect")));
   }
 }
 
@@ -325,7 +325,7 @@ $("message").addEventListener("keydown", (e) => {
 function connectButton(s) {
   const c = s.connect;
   if (c.kind === "paste") return el("button", { class: "btn primary", onclick: () => openConnect(s) }, "Connect");
-  const href = c.kind === "google" ? "/login?connect=1&back=access" : `/connect/setup?then=${encodeURIComponent(s.id)}`;
+  const href = c.kind === "google" ? "/connect/google?back=access" : `/connect/setup?then=${encodeURIComponent(s.id)}`;
   return el("a", { class: "btn primary", href }, "Connect");
 }
 
@@ -791,6 +791,16 @@ function renderSettings() {
 }
 
 $("openSettings").onclick = () => { renderSettings(); $("partnerResults").textContent = ""; $("settingsDialog").showModal(); };
+$("changePassword").onclick = async () => {
+  const value = $("newPassword").value.trim();
+  if (!value) { $("newPassword").focus(); return; }
+  if (!confirm("Change the password? Everyone else is signed out and needs the new one.")) return;
+  try {
+    await api("POST", "/api/password", { password: value });
+    $("newPassword").value = "";
+    toast("Password changed. Everyone else is signed out.");
+  } catch (e) { toast(e.message); }
+};
 $("closeSettings").onclick = () => $("settingsDialog").close();
 $("partnersEnabled").addEventListener("change", async (e) => {
   try { state.settings = (await api("PATCH", "/api/settings", { partners_enabled: e.target.checked })).settings; refreshKnowledge(); }

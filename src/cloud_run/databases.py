@@ -102,6 +102,6 @@ def run(name, sql, secrets, confirmed=False, connect=None):
     except Exception as exc:  # noqa: BLE001 - the model reads this and adjusts
         message = _scrub(exc, url)
         if "read-only transaction" in message:
-            message += (" (This statement changes data. Show the owner the exact statement and ask; run it with "
-                        "confirmed=true only after they say yes.)")
+            message += (" (This statement changes data. Show Manne the exact statement and ask; run it with "
+                        "confirmed=true only after he says yes.)")
         return {"error": message}

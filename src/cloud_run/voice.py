@@ -88,7 +88,7 @@ error, tell Manne in one sentence that {label} couldn't answer, and why.
     if vocabulary:
         # The assistant's own calls have the whole company background, which is why it hears names right.
         text += ("\nNAMES AND TERMS YOU WILL HEAR. Use this only to write down what Manne says correctly "
-                 "(people, salons, brands, systems, projects); never answer from it.\n" + vocabulary)
+                 "(people, products, systems, projects); never answer from it.\n" + vocabulary)
     return text
 
 

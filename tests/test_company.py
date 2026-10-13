@@ -29,7 +29,7 @@ class KnowledgeTests(unittest.TestCase):
         systems, questions = store.list_items("systems"), store.list_items("questions")
         self.assertEqual(len(systems), len(knowledge.SEED_SYSTEMS))
         self.assertEqual(len(questions), len(knowledge.SEED_QUESTIONS))
-        self.assertEqual(store.get_item("systems", "google_chat")["status"], "connected")
+        self.assertEqual(store.get_item("systems", "google_calendar")["status"], "connected")
         store.delete_item("questions", questions[0]["id"])
         knowledge.ensure_seeded(store)  # a deleted seed question stays deleted
         self.assertEqual(len(store.list_items("questions")), len(knowledge.SEED_QUESTIONS) - 1)
@@ -55,7 +55,7 @@ class KnowledgeTests(unittest.TestCase):
                        "Refunds, prices, discounts, ad budgets, payments: ask"):
             self.assertIn(needle, text)
         self.assertIn("FBM Removal", knowledge.brief(store, compact=True))
-        self.assertIn("Superhairpieces", knowledge.company_background())
+        self.assertIn("HelperXpress", knowledge.company_background())
 
     def test_gemini_schema_conversion(self):
         converted = to_gemini_schema({"type": "object", "properties": {"a": {"type": "array", "items": {"type": "string"}}},
@@ -134,11 +134,11 @@ class ToolTests(unittest.TestCase):
         t = self.tools.call("create_task", {"title": "Call SkuVault", "priority": "high"})["task"]
         self.tools.call("update_task", {"task_id": t["id"], "status": "done"})
         self.assertEqual(self.store.get_task(t["id"])["status"], "done")
-        self.tools.call("request_access", {"system": "SkuVault", "why": "stock levels"})
-        self.assertEqual(self.store.get_item("systems", "skuvault")["status"], "requested")
+        self.tools.call("request_access", {"system": "hosting", "why": "deploy logs"})
+        self.assertEqual(self.store.get_item("systems", "hosting")["status"], "requested")
         self.tools.call("request_access", {"system": "Shopify", "why": "Gen'C store"})
         self.assertTrue(any(s["name"] == "Shopify" for s in self.store.list_items("systems")))
-        self.assertIn("note", self.tools.call("request_access", {"system": "Google Chat", "why": "x"}))
+        self.assertIn("note", self.tools.call("request_access", {"system": "Google Calendar", "why": "x"}))
         self.tools.call("set_autopilot", {"on": False})
         self.assertFalse(self.tools.call("assistant_status", {})["autopilot_on"])
 
@@ -1143,7 +1143,8 @@ class RobustnessTests(unittest.TestCase):
                                            headers={"Origin": "https://app.example"}):
             from flask import session
 
-            session["email"] = main.OWNER_EMAIL
+            main.secret_store.put(main.PASSWORD_SECRET_ID, "test-password")
+            session["signed_in"] = main.password_mark("test-password")
             with mock.patch.object(main, "talk_service", side_effect=RuntimeError("store unavailable")):
                 main.voice_ws(ws)
         messages = [json.loads(m) for m in ws.sent]
@@ -1243,8 +1244,9 @@ class WebTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.client = main.app.test_client()
+        main.secret_store.put(main.PASSWORD_SECRET_ID, "test-password")
         with self.client.session_transaction() as s:
-            s["email"] = main.OWNER_EMAIL
+            s["signed_in"] = main.password_mark("test-password")
 
     def call(self, method, path, body=None):
         return self.client.open(path, method=method, json=body, headers={"X-Chat-Assistant": "1"})
@@ -1280,8 +1282,8 @@ class WebTests(unittest.TestCase):
         p = self.call("POST", "/api/projects", {"name": "Brampton launch", "company": "superhairpieces"}).get_json()["project"]
         self.call("PATCH", f"/api/projects/{p['id']}", {"status": "blocked"})
         self.assertEqual(self.store.get_item("projects", p["id"])["status"], "blocked")
-        self.call("PATCH", "/api/systems/skuvault", {"status": "connected"})
-        self.assertEqual(self.store.get_item("systems", "skuvault")["status"], "connected")
+        self.call("PATCH", "/api/systems/hosting", {"status": "connected"})
+        self.assertEqual(self.store.get_item("systems", "hosting")["status"], "connected")
         s = self.call("PATCH", "/api/settings", {"autonomy": {"money": "auto", "bogus": "auto", "calendar": "maybe"},
                                                  "openai_model": "gpt-x", "partners_enabled": False}).get_json()["settings"]
         self.assertEqual(s["autonomy"]["money"], "auto")
@@ -1304,7 +1306,7 @@ class WebTests(unittest.TestCase):
         with self.main.app.test_request_context("/ws/voice", headers={"Origin": "https://evil.example"}):
             from flask import session
 
-            session["email"] = self.main.OWNER_EMAIL
+            session["signed_in"] = self.main.password_mark("test-password")
             self.main.voice_ws(ws)
         self.assertIn("its own address", ws.sent[0])
         self.assertEqual(len(ws.sent), 1)  # nothing else happens for a foreign page
@@ -1327,7 +1329,7 @@ class WebTests(unittest.TestCase):
                 mock.patch.dict(self.main.app.config, {"VOICE_CONNECT": Connect}):
             from flask import session as flask_session
 
-            flask_session["email"] = self.main.OWNER_EMAIL
+            flask_session["signed_in"] = self.main.password_mark("test-password")
             self.main.voice_ws(ws)
         return [json.loads(f) for f in ws.sent if isinstance(f, str)], seen.get("config")
 
@@ -1346,8 +1348,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(config.realtime_input_config.automatic_activity_detection.silence_duration_ms,
                          voice.RELAY_END_SILENCE_MS)
         # The relay gets the company's names so it writes them down right.
-        self.assertIn("Ridgeway", str(config.system_instruction))
-        self.assertIn("SkuVault", str(config.system_instruction))
+        self.assertIn("HelperXpress", str(config.system_instruction))
         # Claude answered with its own prompt (in voice style, warned about misheard names) and saved the
         # turns; the bridge saved nothing.
         self.assertIn("speaking out loud", self.fake["claude"].calls[-1]["system"])
@@ -1367,7 +1368,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("ChatGPT, made by OpenAI", conn.updates[0]["instructions"])
         self.assertEqual(conn.updates[0]["audio"]["output"]["voice"], "marin")  # the voice replies are read in
         self.assertNotIn("speech recognition", conn.updates[0]["instructions"])  # it hears the audio itself
-        self.assertIn("Ruvy", conn.updates[0]["audio"]["input"]["transcription"]["prompt"])
+        self.assertIn("HelperXpress", conn.updates[0]["audio"]["input"]["transcription"]["prompt"])
         self.assertEqual([t["text"] for t in self.store.get_talk("chatgpt")], ["Jill covers outreach", "Noted."])
 
     def test_voice_with_claude_on_chatgpts_voice_line(self):
@@ -1480,7 +1481,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(r.location, "/?tab=access&setup=done&open=democrm")
         self.assertEqual(self.store.get_flag("connect_setup")["created"], ["DEMO_CRM_TOKEN"])
         with self.client.session_transaction() as s:
-            self.assertEqual(s.get("email"), self.main.OWNER_EMAIL)   # still signed in
+            self.assertEqual(s.get("signed_in"), self.main.password_mark("test-password"))   # still signed in
             self.assertNotIn("ya29.owner-cloud-token", json.dumps(dict(s)))  # the owner token is gone
         self.assertNotIn("ya29.owner-cloud-token", json.dumps(self.store.get_flag("connect_setup")))
 
@@ -1500,9 +1501,7 @@ class WebTests(unittest.TestCase):
         systems = {s["id"]: s for s in self.call("GET", "/api/knowledge").get_json()["systems"]}
         self.assertNotIn("hubspot", systems)  # retired: no row, no connector
         self.assertNotIn("reamaze", systems)
-        self.assertEqual(systems["merchant_center"]["connect"]["kind"], "google")
-        self.assertEqual(systems["skuvault"]["connect"]["kind"], "key")
-        self.assertEqual(systems["gmail"]["connect"]["kind"], "google")
+        self.assertIn("hosting", systems)
 
     def test_hidden_elements_stay_hidden(self):
         # .voicebar sets display: flex, which beats the browser's own [hidden] rule without this.

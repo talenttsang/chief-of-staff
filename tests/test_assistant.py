@@ -283,8 +283,9 @@ class WebTests(unittest.TestCase):
         self.client = main.app.test_client()
 
     def sign_in(self):
+        self.main.secret_store.put(self.main.PASSWORD_SECRET_ID, "test-password")
         with self.client.session_transaction() as s:
-            s["email"] = self.main.OWNER_EMAIL
+            s["signed_in"] = self.main.password_mark("test-password")
 
     def call(self, method, path, body=None, csrf=True):
         headers = {"X-Chat-Assistant": "1"} if csrf else {}
@@ -294,7 +295,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/state").status_code, 401)
         page = self.client.get("/")
         self.assertEqual(page.status_code, 200)
-        self.assertIn(b"isn't set up yet", page.data)  # no OAuth client stored
+        self.assertIn(b"No password is set yet", page.data)
 
     def test_board_page_for_owner(self):
         self.sign_in()
@@ -305,7 +306,6 @@ class WebTests(unittest.TestCase):
         self.assertIn(b'id="chatLauncher"', page.data)  # what it minimizes to
         self.assertNotIn(b'data-tab="talk"', page.data)
         self.assertIn(b"<title>Man AI</title>", page.data)
-        self.assertIn(b"manne@superhairpieces.com", page.data)
         self.assertEqual(page.headers["X-Frame-Options"], "DENY")
 
     def test_other_account_session_is_rejected(self):
@@ -373,20 +373,19 @@ class WebTests(unittest.TestCase):
         self.assertNotIn("evil", s)
 
     def test_callback_rejects_bad_state(self):
+        self.assertEqual(self.client.get("/oauth/callback?state=x&code=y").status_code, 302)  # signed out
+        self.sign_in()
         self.assertEqual(self.client.get("/oauth/callback?state=x&code=y").status_code, 400)
 
-    def test_login_redirects_to_google_for_owner(self):
-        self.main.secret_store.put(self.main.OAUTH_CLIENT_SECRET_ID, json.dumps({"web": {
-            "client_id": "cid.apps.googleusercontent.com", "client_secret": "s",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}}))
-        resp = self.client.get("/login")
-        self.assertEqual(resp.status_code, 302)
-        loc = resp.headers["Location"]
-        self.assertIn("accounts.google.com", loc)
-        self.assertIn("login_hint=manne%40superhairpieces.com", loc)
-        self.assertIn("chat.messages.create", loc)       # no token yet -> full connect
-        self.assertIn("access_type=offline", loc)
-        self.assertIn("code_challenge=", loc)             # PKCE
+    def test_password_login(self):
+        self.main.secret_store.put(self.main.PASSWORD_SECRET_ID, "right-password")
+        self.assertEqual(self.client.post("/login", data={"password": "wrong"}).status_code, 401)
+        self.assertEqual(self.call("GET", "/api/state").status_code, 401)
+        resp = self.client.post("/login", data={"password": "right-password"})
+        self.assertEqual((resp.status_code, resp.headers["Location"]), (302, "/"))
+        self.assertEqual(self.call("GET", "/api/state").status_code, 200)
+        self.main.secret_store.put(self.main.PASSWORD_SECRET_ID, "changed")  # a new password signs everyone out
+        self.assertEqual(self.call("GET", "/api/state").status_code, 401)
 
 
 if __name__ == "__main__":

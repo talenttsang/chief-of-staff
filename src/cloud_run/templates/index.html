@@ -20,7 +20,6 @@
     .toggle input:checked + .track { background: var(--good); }
     .toggle input:checked + .track::after { left: 16px; }
     .toggle input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .who { color: var(--muted); font-size: 13px; }
     .iconbtn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; width: 34px; height: 34px; cursor: pointer; font-size: 16px; color: var(--muted); }
     .iconbtn:hover { background: var(--panel-2); color: var(--text); }
     main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
@@ -168,7 +167,6 @@
     @media (max-width: 600px) {
       header, main { padding-left: 16px; padding-right: 16px; }
       .row { grid-template-columns: 1fr; }
-      .who { display: none; }
       /* On a phone the open chat fills the screen; minimize gets back to the page. */
       .chatwin { inset: 0; width: auto; height: auto; border: 0; border-radius: 0; box-shadow: none; padding: 8px 12px 12px; }
       .launcher { right: 16px; bottom: 16px; }
@@ -184,7 +182,6 @@
   </label>
   <button class="btn primary" id="runNow">Run now</button>
   <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">⚙</button>
-  <span class="who">{{ owner }}</span>
   <button class="btn" id="logout">Sign out</button>
 </header>
 
@@ -224,8 +221,8 @@
     <div class="toolbar">
       <select id="companyFilter" aria-label="Company">
         <option value="">Both companies</option>
-        <option value="superhairpieces">Superhairpieces</option>
-        <option value="gencbeauty">Gen'C Beauty</option>
+        <option value="helperconnects">HelperConnects</option>
+        <option value="helperxpress">HelperXpress</option>
       </select>
       <select id="projectStatusFilter" aria-label="Status">
         <option value="">Any status</option>
@@ -323,7 +320,7 @@
     <h2 id="projectDialogTitle">Project</h2>
     <label>Name <input name="name" required maxlength="200"></label>
     <div class="row">
-      <label>Company <select name="company"><option value="">Not set</option><option value="superhairpieces">Superhairpieces</option><option value="gencbeauty">Gen'C Beauty</option><option value="both">Both</option></select></label>
+      <label>Company <select name="company"><option value="">Not set</option><option value="helperconnects">HelperConnects</option><option value="helperxpress">HelperXpress</option><option value="both">Both</option></select></label>
       <label>Status <select name="status"><option value="active">Active</option><option value="blocked">Blocked</option><option value="paused">Paused</option><option value="done">Done</option><option value="unknown">Unknown</option></select></label>
     </div>
     <div class="row">
@@ -379,6 +376,12 @@
     <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button type="button" class="btn" id="testPartners">Test partners</button>
       <span class="why" id="partnerResults"></span>
+    </div>
+    <h4>Sign-in password</h4>
+    <p class="why" style="margin:0">Everyone uses one password. Changing it signs everyone else out. A few words are much harder to guess than a number.</p>
+    <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="password" id="newPassword" aria-label="New password" placeholder="New password" autocomplete="new-password" maxlength="200" style="flex:1;min-width:160px">
+      <button type="button" class="btn" id="changePassword">Change password</button>
     </div>
     <h4>Reading</h4>
     <label class="check"><input type="checkbox" id="readBots"> Also read posts from apps and bots (e.g. notification spaces)</label>

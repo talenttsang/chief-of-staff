@@ -20,9 +20,9 @@ import requests
 import integrations
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT", "helperexpress-hk")
-# Secrets can live in a different project from Firestore and Vertex AI; the app's service account stays in GCP_PROJECT.
-SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT", "helperexpress-hk")
-if SECRETS_PROJECT == "shp-ai-bot-2026":  # never mannetsang's Secret Manager
+# Secrets come only from talenttsang's project, never mannetsang's.
+SECRETS_PROJECT = os.environ.get("SECRETS_PROJECT") or GCP_PROJECT
+if SECRETS_PROJECT == "shp-ai-bot-2026":
     raise RuntimeError("SECRETS_PROJECT must not be shp-ai-bot-2026")
 APP_SERVICE_ACCOUNT = os.environ.get("APP_SERVICE_ACCOUNT", f"chat-assistant@{GCP_PROJECT}.iam.gserviceaccount.com")
 CLOUD_SCOPE = "https://www.googleapis.com/auth/cloud-platform"

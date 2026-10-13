@@ -13,7 +13,7 @@ Cloud Scheduler (hourly) ──POST /run──►  Cloud Run: chat-assistant (Fl
                                           ├─ Calendar API: events
                                           ├─ Vertex AI Gemini: tasks + actions per conversation
                                           └─ Firestore: board, activity, runs, watermarks
-Browser ──Google sign-in (Manne only)──►  board · activity · pause switch · run now
+Browser ──shared password──►  board · activity · pause switch · run now
 ```
 
 ## What it does each run
@@ -53,13 +53,15 @@ sent or held, is logged with the message it answers and the reason.
 
 ## Security
 
-- **Only `OWNER_EMAIL`** (manne@superhairpieces.com) can sign in; any other
-  Google account is refused after Google verifies it.
-- The token is **Manne's own OAuth sign-in**, so it can reach only Manne's
-  chats and calendar. There is no domain-wide delegation.
-- It lives in Secret Manager as `chat-assistant-user-token`, and the workflow
-  grants read access on it only to the dedicated `chat-assistant@` service
-  account. A new sign-in disables the old version.
+- **Sign-in is one shared password**, kept in Secret Manager as
+  `chat-assistant-password`. Changing it (in the app) signs every other
+  browser out. Wrong passwords are rate-limited.
+- **Connect Google** links one Google account (`GOOGLE_ACCOUNT`) for Gmail,
+  Calendar and Drive; a token from any other account is ignored. There is no
+  domain-wide delegation.
+- That token lives in Secret Manager as `chat-assistant-user-token`, readable
+  only by the dedicated `chat-assistant@` service account. A new connection
+  disables the old version.
 - **That isolation holds only if nothing else has project-wide Secret Manager
   read access.** A project-level *Secret Manager Secret Accessor* (or Admin)
   grant lets its holder read this token and post as the owner. Keep such

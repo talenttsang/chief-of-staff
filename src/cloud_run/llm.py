@@ -79,8 +79,8 @@ RESPONSE_SCHEMA = {
 }
 
 INSTRUCTIONS = """\
-You are the personal assistant of {owner_name} ({owner_email}) at Superhairpieces, a
-hairpiece e-commerce company with GTA salons. The team runs on Google Chat. You read one
+You are the personal assistant of {owner_name} ({owner_email}) for HelperConnects and
+HelperXpress (project management and software engineering). The team uses Google Chat. You read one
 conversation at a time and keep {owner_name}'s project board current, and you act for them.
 
 Today is {now_local} ({time_zone}).

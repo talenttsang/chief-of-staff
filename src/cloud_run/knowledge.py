@@ -1,7 +1,7 @@
 """What the assistant knows about the companies, and how that knowledge is shown to a model.
 
 Three layers:
-  1. knowledge/company.md: the stable background (personas, salons, staff, teams),
+  1. knowledge/company.md: the stable background (the businesses, people, how to work),
      copied from the repo's CLAUDE.md and shipped with the service.
   2. The knowledge base in the store: projects, facts, open questions for the
      owner, and the systems the assistant can or can't reach yet. It grows from
@@ -24,51 +24,39 @@ _company_cache = None
 # status: connected (the assistant can use it now), available (credentials exist in the
 # project but the assistant can't use them yet), needed, requested, not_used.
 SEED_SYSTEMS = [
-    ("google_chat", "Google Chat", "Communication", "connected", "Read every space and DM; post as Manne."),
     ("google_calendar", "Google Calendar", "Communication", "connected", "Read and create calendar events."),
-    ("workspace_directory", "Workspace directory", "People", "connected", "Names and emails of everyone in the company."),
     # The AI rows' status is kept true by talk.Talk.test_partners (Check connections and every hourly run).
     ("gemini", "Gemini (Vertex AI)", "AI", "connected", "Man AI's own brain and voice."),
-    ("chatgpt", "ChatGPT (OpenAI)", "AI partner", "available", "Second opinions, drafts and live voice calls from ChatGPT."),
-    ("claude", "Claude (Anthropic)", "AI partner", "available", "Second opinions and drafts from Claude."),
-    ("bigcommerce_ca", "BigCommerce: superhairpieces.ca", "Commerce", "available",
-     "Orders, products, customers for the .ca store (hash gmosz3ja). Token exists for the reporting scripts."),
-    ("bigcommerce_com", "BigCommerce: superhairpieces.com (USD)", "Commerce", "needed", "Orders, products, customers for the US store."),
-    ("merchant_center", "Google Merchant Center", "Marketing", "available",
-     "Shopping feeds. .ca account 5298296396 is connected for the repo scripts; .com/EU 289630622 and Gen'C 670525760 are not."),
-    ("trustpilot", "Trustpilot", "Reviews", "available", "Reviews and replies; used by the trustpilot pipeline."),
-    ("gmail", "Gmail", "Communication", "needed", "Read and send email as Manne (can be added to the same sign-in)."),
-    ("google_drive", "Google Drive / Sheets / Docs", "Documents", "needed",
-     "Find and update SOPs, sheets and docs (can be added to the same sign-in)."),
-    ("skuvault", "SkuVault", "Inventory", "needed", "Stock levels, purchase orders, the Amazon-SkuVault bridge."),
-    ("stamped", "Stamped.io", "Reviews", "needed", "Product reviews and the Review Rewards program."),
-    ("amazon", "Amazon Seller Central", "Commerce", "needed", "Amazon orders, listings, FBM/FBA."),
-    ("meta", "Meta (Facebook / Instagram)", "Marketing", "needed", "Ads, Instagram posts and messages."),
-    ("google_ads", "Google Ads", "Marketing", "needed", "Campaigns and budgets (an API application exists in the repo)."),
-    ("analytics", "GA4 / Search Console", "Marketing", "needed", "Traffic, conversions, search performance."),
-    ("accounting", "Accounting (QuickBooks?)", "Finance", "needed", "Revenue, costs, payables."),
-    ("teamdesk", "TeamDesk", "Operations", "needed", "Referenced by an existing integration; purpose unknown."),
+    ("chatgpt", "ChatGPT (OpenAI)", "AI partner", "needed",
+     "Second opinions, drafts and live voice calls from ChatGPT. Needs CHATGPT_API_KEY in Secret Manager."),
+    ("claude", "Claude (Anthropic)", "AI partner", "needed",
+     "Second opinions, drafts and code review from Claude. Needs ANTHROPIC_API_KEY in Secret Manager."),
+    ("project_tracker", "Project tracker (GitHub Projects, Jira, Linear?)", "Engineering", "needed",
+     "Where tasks, bugs and sprints live, if not GitHub issues."),
+    ("hosting", "Hosting (Google Cloud, Vercel, AWS?)", "Engineering", "needed",
+     "Deploys, logs and costs of the HelperConnects and HelperXpress apps."),
+    ("error_tracking", "Error tracking (Sentry?)", "Engineering", "needed", "Production errors to triage."),
+    ("team_chat", "Team chat (Slack, WhatsApp, Discord?)", "Communication", "needed",
+     "Where the team talks (Google Chat isn't available on a Gmail account)."),
 ]
 
 SEED_QUESTIONS = [
-    ("Gen'C Beauty: what does it sell, to whom, on which sites or platforms, who's on the team, "
-     "and how does it relate to Superhairpieces?", "I can't run a company I can't describe.", 1),
-    ("What are the top 3-5 goals for each company for the next 90 days, with numbers if you have them?",
-     "Goals decide which projects I push first.", 1),
-    ("List every active project you can think of, one line each: name, goal, owner, status, deadline. "
-     "Which Chat spaces are projects and which are day-to-day channels?", "Projects are how I organise the work.", 1),
-    ("Where does the truth live for orders, inventory, customers/CRM, support tickets, salon appointments, "
-     "finance, staff schedules, and SOPs/documents?", "Tells me which systems to connect first.", 2),
-    ("Which systems will you give me API access to: BigCommerce .com and EU, SkuVault, "
-     "Stamped.io, Amazon Seller Central, Meta/Instagram, Google Ads, GA4/Search Console, accounting, TeamDesk?",
+    ("What does HelperConnects do, for whom, and how does it make money? The same for HelperXpress, and how do "
+     "the two relate?", "I can't run a business I can't describe.", 1),
+    ("Who works on each one (developers, designers, operations, contractors), and who decides what?",
+     "So I route work to the right people.", 1),
+    ("Which GitHub repositories belong to each product, and what's the stack (frontend, backend, database, "
+     "hosting)?", "Engineering work starts with knowing the code.", 1),
+    ("List the active projects and features in flight, one line each: name, goal, owner, status, deadline.",
+     "Projects are how I organise the work.", 1),
+    ("Where do tasks and bugs live today (GitHub issues, Jira, Linear, Notion, a sheet)? How do releases happen?",
+     "Tells me which board to keep current.", 2),
+    ("What are the top 3 goals for each product for the next 90 days, with numbers if you have them?",
+     "Goals decide what I push first.", 2),
+    ("Which systems will you give me access to: GitHub, hosting, error tracking, analytics, payments, team chat?",
      "Each connection lets me do work instead of asking about it.", 2),
-    ("What are these Cloud Run services and who maintains them: course-webapp, gchat-gemini-bot, "
-     "genc-sales-dashboard, google-ads-dashboard, order-form, reviews-dashboard, stamped-webhook?",
-     "They're already running on the company's project; I should know what they do.", 3),
-    ("Besides you, who can give me instructions, and who should I escalate to in each area?",
-     "So I route work to the right people.", 2),
-    ("What are my hard limits: spending caps, anything I must never touch or say, "
-     "and who approves when you're unavailable?", "Sets the guardrails for autopilot.", 1),
+    ("What are my hard limits: what must I never touch, deploy or say without you?",
+     "Sets the guardrails for autopilot.", 1),
 ]
 
 
@@ -92,7 +80,7 @@ def vocabulary(store):
 
 def name_hints(store, limit=900):
     """A short list of names for speech-to-text: company terms, people and places, projects, systems."""
-    names = ["Superhairpieces", "Gen'C Beauty", "Tier 1"]
+    names = ["HelperConnects", "HelperXpress", "Man AI", "GitHub"]
     for line in company_background().splitlines():
         if line.startswith("|") and not line.startswith("|--") and "`" not in line:
             for cell in line.strip("|").split("|"):
