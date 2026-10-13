@@ -277,7 +277,7 @@ class Toolset:
         removed = 0
         if not keep_answer:  # answer_question saved the answer as a fact "Q: ... A: ..."
             for fact in self.store.list_items("facts"):
-                if fact.get("text", "").startswith(f"Q: {q.get('question', '')} A: "):
+                if fact.get("text", "").startswith(f"Q: {q.get('question', '')} A:"):
                     self.store.delete_item("facts", fact["id"])
                     removed += 1
         return {"deleted": True, "question": q.get("question", "")[:200], "answer_facts_removed": removed}
