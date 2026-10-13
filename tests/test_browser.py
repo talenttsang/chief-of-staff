@@ -40,6 +40,13 @@ PAGES = {
           <button type="button" onclick="sib.firstElementChild.textContent='Brother';menu.hidden=backdrop.hidden=true">Brother</button>
           <button type="button" onclick="sib.firstElementChild.textContent='Sister';menu.hidden=backdrop.hidden=true">Sister</button>
         </div></div></div>
+      <div class="field"><label>Gender *</label><div>
+        <button type="button" class="chip" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Male</button>
+        <button type="button" class="chip" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Female</button>
+      </div></div>
+      <div class="field"><label>Age</label><div class="cselect">
+        <button type="button" aria-haspopup="listbox"><span>Select…</span></button></div></div>
+      <div class="field"><label>Ages of children</label><input class="input" type="text" /></div>
     </body></html>""",
     "/product": "<html><head><title>Lace wig</title></head><body><h1>Lace wig</h1><p>$199</p></body></html>",
 }
@@ -146,14 +153,14 @@ class BrowserTests(unittest.TestCase):
         fields = {e["kind"]: e for e in page["elements"] if e["kind"].startswith("input")}
         self.assertEqual(fields["input:date"]["label"], "Date of birth")  # named by the label next to it
         self.assertNotIn("error", self.run_act(session=sid, action="type", target="Date of birth", text="1990-01-02"))
-        name = fields["input:text"]
+        name = next(e for e in page["elements"] if e["label"] == "Full name" and e["kind"] == "input:text")
         self.assertNotIn("error", self.run_act(session=sid, action="type", x=name["x"], y=name["y"], text="Test Helper"))
         date = fields["input:date"]
         self.run_act(session=sid, action="type", target="Date of birth", text="")
         self.assertNotIn("error", self.run_act(session=sid, action="type", x=date["x"], y=date["y"], text="1991-03-04"))
         values = browser._pool.submit(lambda: browser._sessions[sid].page.evaluate(
             "() => [...document.querySelectorAll('input')].map((i) => i.value)")).result(timeout=30)
-        self.assertEqual(values, ["1991-03-04", "Test Helper"])
+        self.assertEqual(values[:2], ["1991-03-04", "Test Helper"])
         self.assertIn("Brother or sister: Select…", [e["label"] for e in page["elements"]])
         opened = self.run_act(session=sid, action="click", target="Brother or sister: Select…")
         self.assertNotIn("error", opened)
@@ -165,6 +172,14 @@ class BrowserTests(unittest.TestCase):
         self.assertIn("The options are: Brother, Sister", missing["error"])
         self.assertNotIn("Brother Sister", missing["text"])  # the menu was closed again, so the page isn't covered
         self.assertNotIn("error", self.run_act(session=sid, action="click", target="Full name"))
+
+        for target, choice in (("None", "Male"), ("Gender", "Female")):  # choices drawn as buttons, not a dropdown
+            self.assertNotIn("error", self.run_act(session=sid, action="select", target=target, text=choice))
+        pressed = browser._pool.submit(lambda: browser._sessions[sid].page.evaluate(
+            "() => [...document.querySelectorAll('.chip')].map((b) => b.getAttribute('aria-pressed'))")).result(timeout=30)
+        self.assertEqual(pressed, ["true", "true"])
+        self.assertIn("is a dropdown", self.run_act(session=sid, action="type", target="Age", text="30")["error"])
+        self.assertNotIn("error", self.run_act(session=sid, action="type", target="Ages of children", text="3"))
         self.run_act(session=sid, action="close")
 
     def test_new_tab_mobile_and_blocked_requests(self):

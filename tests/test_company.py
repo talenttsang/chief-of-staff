@@ -834,10 +834,75 @@ class ResearchAndWorkTests(unittest.TestCase):
         with mock.patch.dict(talk.PARTNERS, {"assistant": fake}):
             worker.work_on(talk.Talk(self.store, self.secrets, lambda: None, "x@y"), self.store, "t1")
         steps = list(reversed(self.store.list_steps()))
-        self.assertEqual([s["tool"] for s in steps], ["task_started", "update_task", "task_done"])
+        self.assertEqual([s["tool"] for s in steps], ["task_started", "update_task", "task_done"])  # one round
         self.assertEqual({s["task_id"] for s in steps}, {"t1"})
         self.assertEqual(steps[1]["caller"], "assistant (task)")
         self.assertIn("done", steps[1]["detail"])
+
+    def test_a_task_goes_on_round_after_round_until_it_stops(self):
+        import worker
+
+        class Rounds(FakePartner):
+            """Works once per round; finishes on round 3."""
+            def respond(self, system, history, toolset, secrets=None, model=None):
+                self.calls.append(1)
+                toolset.call("record_fact", {"text": f"round {len(self.calls)}"})
+                if len(self.calls) == 3:
+                    toolset.call("update_task", {"task_id": "t1", "status": "done"})
+                return {"text": f"Round {len(self.calls)}.", "tools": toolset.log}
+
+        self.store.save_task("t1", {"title": "Long E2E test", "status": "todo", "owner": "Assistant"})
+        fake = Rounds()
+        with mock.patch.dict(talk.PARTNERS, {"assistant": fake}):
+            outcome = worker.work_until_stuck(talk.Talk(self.store, self.secrets, lambda: None, "x@y"), self.store, "t1")
+        self.assertTrue(outcome["done"])
+        self.assertEqual(len(fake.calls), 3)
+        marks = [s["tool"] for s in reversed(self.store.list_steps()) if s["tool"].startswith("task_")]
+        self.assertEqual(marks, ["task_started", "task_report", "task_started", "task_report", "task_started", "task_done"])
+
+    def test_a_task_stops_when_it_needs_manne_or_gets_nowhere(self):
+        import worker
+
+        service = talk.Talk(self.store, self.secrets, lambda: None, "x@y")
+        self.store.save_task("t1", {"title": "Needs an answer", "status": "todo", "owner": "Assistant"})
+        asks = FakePartner("Asked.", tool=("ask_owner", {"question": "Which plan?", "why": "to pay"}))
+        with mock.patch.dict(talk.PARTNERS, {"assistant": asks}):
+            worker.work_until_stuck(service, self.store, "t1")
+        self.assertEqual(len(asks.calls), 1)
+        self.assertEqual(self.store.list_steps()[0]["tool"], "task_needs_you")
+
+        self.store.save_task("t2", {"title": "Goes nowhere", "status": "todo", "owner": "Assistant"})
+        fails = FakePartner("Couldn't.", tool=("update_task", {"task_id": "nope", "status": "done"}))
+        with mock.patch.dict(talk.PARTNERS, {"assistant": fails}):
+            worker.work_until_stuck(service, self.store, "t2")
+        self.assertEqual(len(fails.calls), 1)
+        last = self.store.list_steps()[0]
+        self.assertEqual((last["tool"], last["ok"]), ("task_paused", False))
+
+    def test_problems_found_become_tasks_that_get_fixed(self):
+        import worker
+
+        self.assertIn("create_task", worker.PROMPT)
+        self.assertIn("start_task it", worker.PROMPT)
+        self.assertIn("commit_code", worker.PROMPT)
+        self.store.save_task("t1", {"title": "E2E", "status": "todo", "owner": "Assistant"})
+        fake = FakePartner("Found a bug.")
+        with mock.patch.dict(talk.PARTNERS, {"assistant": fake}):
+            worker.work_on(talk.Talk(self.store, self.secrets, lambda: None, "x@y", starter=lambda t: None), self.store, "t1")
+        self.assertIn("start_task", fake.calls[0]["tools"])  # working alone it can start the fix
+
+    def test_start_task_waits_when_enough_are_running(self):
+        import worker
+        from store import utcnow_iso
+
+        for i in range(worker.MAX_PARALLEL):
+            self.store.save_task(f"b{i}", {"title": "busy", "status": "in_progress", "working_since": utcnow_iso()})
+        self.store.save_task("t3", {"title": "Fix the gender buttons", "status": "todo"})
+        started = []
+        result = Toolset(self.store, None, starter=started.append).call("start_task", {"task_id": "t3"})
+        self.assertTrue(result["queued"])
+        self.assertEqual(started, [])
+        self.assertEqual(self.store.get_task("t3")["owner"], "Assistant")  # the hourly run picks it up
 
     def test_start_task_hands_the_task_over_and_starts_it(self):
         started = []
@@ -1353,12 +1418,12 @@ class WebTests(unittest.TestCase):
 
     def test_give_a_task_to_the_assistant(self):
         self.store.save_task("t9", {"title": "Check yesterday's CA orders", "status": "todo"})
-        self.fake["assistant"].text = "12 orders yesterday, CAD 4,380."
-        r = self.call("POST", "/api/tasks/t9/work")
+        with mock.patch.object(self.main, "start_task_work") as start:
+            r = self.call("POST", "/api/tasks/t9/work")
         self.assertEqual(r.status_code, 200)
         body = r.get_json()
-        self.assertEqual(body["task"]["owner"], "Assistant")
-        self.assertEqual(body["report"], "12 orders yesterday, CAD 4,380.")
+        self.assertEqual((body["task"]["owner"], body["started"]), ("Assistant", True))
+        start.assert_called_once_with("t9")  # in the background: the page is told when it stops
         self.assertEqual(self.call("POST", "/api/tasks/nope/work").status_code, 404)
         self.store.save_task("t9", {"working_since": __import__("store").utcnow_iso()})
         self.assertEqual(self.call("POST", "/api/tasks/t9/work").status_code, 409)  # already on it

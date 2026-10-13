@@ -22,6 +22,8 @@ OWNER = "Assistant"
 WORK_PER_RUN = int(os.environ.get("WORK_PER_RUN", "3"))   # tasks the hourly run works, at most
 REWORK_HOURS = 6        # a task in progress is picked up again after this long
 BUSY_MINUTES = 15       # one task isn't worked twice at the same time
+ROUNDS = int(os.environ.get("WORK_ROUNDS", "8"))  # a handed-over task goes on round after round, at most this many
+MAX_PARALLEL = 3        # tasks worked at the same time; more wait for the hourly run
 
 PROMPT = """\
 You're working on a board task on your own. No one else is in this conversation.
@@ -47,8 +49,18 @@ pay or enter card details.
 When the task is complete, call update_task with status done. If only Manne can unblock it, ask_owner with
 one precise question. Record anything worth keeping (record_fact, save_project).
 
-Finish with a short report for Manne: what you found or did (numbers, names, links), what's waiting for his OK,
-and what's left."""
+Problems you find go on the board and get fixed, not just reported. For each real problem in the app (a bug, an
+error, a broken or confusing page, a step a user can't get past): list_tasks first so you don't add it twice, then
+create_task (title: what's wrong; detail: the page, the steps to reproduce, what happened and what should happen;
+owner Assistant; the same project), then start_task it. Working that task means fixing it: find the code
+(call_api on GitHub), fix it with commit_code, check the deploy, and test it again. Then carry on with this task.
+Trouble with your own browser (an element you couldn't find or click) is not a problem in the app: try another
+way first (x,y from the screenshot, the label from elements).
+
+You get several rounds: if you run out of steps, report where you are and the next round continues from there.
+
+Finish with a short report for Manne: what you found or did (numbers, names, links), the tasks you added for
+problems, what's waiting for his OK, and what's left."""
 
 
 def is_mine(task):
@@ -102,7 +114,7 @@ def work_on(service, store, task_id, partner="assistant"):
         previous=f"\n\nYour report last time ({task.get('worked_at', '')[:16]}):\n{task['result'][:3000]}"
         if task.get("result") else "")
     toolset = Toolset(store, service._google(), caller=f"{partner} (task)", secrets=service.secrets,
-                      consult=service.consult_fn(partner), may_change=False)
+                      consult=service.consult_fn(partner), may_change=False, starter=service.starter)
     toolset.task_id = task_id
     title = task.get("title", "")
     store.add_step({"caller": toolset.caller, "tool": "task_started", "detail": title[:240], "ok": True, "task_id": task_id})
@@ -119,12 +131,50 @@ def work_on(service, store, task_id, partner="assistant"):
     finished = store.get_task(task_id) or {}
     store.save_task(task_id, {"working_since": "", "work_error": "", "worked_at": utcnow_iso(), "result": report[:6000],
                               "work_tools": sorted({t.get("tool") for t in tools if t.get("tool")})})
-    status = "done" if finished.get("status") == "done" else "still open"
-    store.add_step({"caller": toolset.caller, "tool": "task_done" if status == "done" else "task_paused",
-                    "detail": f"{title[:120]}：{report[:200]}", "ok": True, "task_id": task_id})
+    done = finished.get("status") == "done"
+    if done:
+        store.add_step({"caller": toolset.caller, "tool": "task_done", "detail": f"{title[:120]}：{report[:300]}",
+                        "ok": True, "task_id": task_id})
+    else:
+        store.add_step({"caller": toolset.caller, "tool": "task_report", "detail": f"{title[:120]}：{report[:300]}",
+                        "ok": True, "task_id": task_id})
     store.append_talk(partner, [{"role": "assistant", "at": utcnow_iso(), "task_id": task_id, "tools": tools[-15:],
-                                 "text": f"Worked on the task “{task.get('title', '')}” ({status}).\n\n{report}"}])
-    return {"report": report, "tools": tools, "done": finished.get("status") == "done"}
+                                 "text": f"Worked on the task “{title}” ({'done' if done else 'still open'}).\n\n{report}"}])
+    return {"report": report, "tools": tools, "done": done}
+
+
+def _stuck(tools):
+    """A round that got nowhere: no tool calls, or most of them failed."""
+    return not tools or sum(1 for t in tools if not t.get("ok", True)) * 2 > len(tools)
+
+
+def work_until_stuck(service, store, task_id, rounds=ROUNDS):
+    """Work a task round after round until it's done, needs Manne, stops getting anywhere, or the rounds run out.
+    The last step in the work log says which, so the page can tell people."""
+    asked = False
+    for _ in range(max(1, rounds)):
+        outcome = work_on(service, store, task_id)
+        if outcome["done"]:
+            return outcome
+        asked = any(t.get("tool") == "ask_owner" and t.get("ok", True) for t in outcome["tools"])
+        if asked or _stuck(outcome["tools"]):
+            break
+    task = store.get_task(task_id) or {}
+    stuck = _stuck(outcome["tools"])
+    if asked:
+        why, tool = "需要你回答問題（見「問題」分頁）", "task_needs_you"
+    elif stuck:
+        why, tool = "卡住了：這一輪沒有進展", "task_paused"
+    else:
+        why, tool = f"已處理 {rounds} 輪，{REWORK_HOURS} 小時內會自動繼續", "task_paused"
+    store.add_step({"caller": "assistant (task)", "tool": tool, "detail": f"{task.get('title', '')[:120]}：{why}",
+                    "ok": not stuck, "task_id": task_id})
+    return dict(outcome, stopped=why)
+
+
+def busy_count(store):
+    now = datetime.now(timezone.utc)
+    return sum(1 for t in store.list_tasks() if _busy(t, now))
 
 
 def work_due(service, store, limit=WORK_PER_RUN):
@@ -135,7 +185,7 @@ def work_due(service, store, limit=WORK_PER_RUN):
     worked = []
     for task in due[:limit]:
         try:
-            outcome = work_on(service, store, task["id"])
+            outcome = work_until_stuck(service, store, task["id"], rounds=1)
             worked.append({"task": task["id"], "title": task.get("title", ""), "done": outcome["done"]})
         except Exception as exc:  # noqa: BLE001 - one task's failure mustn't stop the others
             worked.append({"task": task["id"], "title": task.get("title", ""), "error": str(exc)[:200]})

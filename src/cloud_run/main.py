@@ -399,17 +399,16 @@ def api_create_task():
 
 @app.post("/api/tasks/<task_id>/work")
 def api_work_task(task_id):
-    """Give a task to the assistant and let it work it now (it reports on the task and in the chat)."""
-    if not store.get_task(task_id):
+    """Give a task to the assistant: it works it in the background, round after round, and the page is told when
+    it stops (the work log's last step for the task)."""
+    task = store.get_task(task_id)
+    if not task:
         return jsonify(error="找不到此任務。"), 404
-    try:
-        outcome = worker.work_on(talk_service(), store, task_id)
-    except worker.Busy as exc:
-        return jsonify(error=str(exc)), 409
-    except Exception as exc:  # noqa: BLE001 - shown as a toast; the task keeps the error
-        print(f"work[{task_id}] failed: {exc!r}")
-        return jsonify(error=f"The assistant couldn't finish working on it: {str(exc)[:300]}"), 502
-    return jsonify(task=store.get_task(task_id), report=outcome["report"], done=outcome["done"])
+    if worker._busy(task, datetime.now(timezone.utc)):
+        return jsonify(error="Talent Solutions AI 已經在處理這個任務。"), 409
+    task = store.save_task(task_id, {"owner": worker.OWNER, "owner_is_me": False, "updated_at": utcnow_iso()})
+    start_task_work(task_id)
+    return jsonify(task=task, started=True)
 
 
 @app.patch("/api/tasks/<task_id>")
@@ -463,7 +462,7 @@ def start_task_work(task_id):
                 requests.post(f"{PUBLIC_URL}/work/{task_id}", timeout=(10, 3600),
                               headers={"X-Run-Token": secret_store.get(RUN_TOKEN_SECRET_ID) or ""})
             else:
-                worker.work_on(talk_service(), store, task_id)
+                worker.work_until_stuck(talk_service(), store, task_id)
         except Exception as exc:  # noqa: BLE001 - the task keeps its error, and the hourly run picks it up again
             print(f"background work[{task_id}]: {exc!r}")
 
@@ -848,12 +847,12 @@ def background_work(task_id):
     if not store.get_task(task_id):
         return jsonify(error="no such task"), 404
     try:
-        outcome = worker.work_on(talk_service(), store, task_id)
+        outcome = worker.work_until_stuck(talk_service(), store, task_id)
     except worker.Busy as exc:
         return jsonify(error=str(exc)), 409
     except Exception as exc:  # noqa: BLE001 - logged as a step and kept on the task
         return jsonify(error=str(exc)[:300]), 502
-    return jsonify(done=outcome["done"])
+    return jsonify(done=outcome["done"], stopped=outcome.get("stopped", ""))
 
 
 @app.get("/api/progress")

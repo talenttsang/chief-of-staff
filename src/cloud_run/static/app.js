@@ -474,12 +474,10 @@ $("workTask").onclick = async () => {
   $("taskDialog").close();
   state.tasks = state.tasks.map((x) => (x.id === t.id ? { ...x, owner: "Assistant", owner_is_me: false, working_since: new Date().toISOString() } : x));
   renderBoard();
-  toast(`Talent Solutions AI 正在處理「${t.title}」。報告會顯示在任務和對話中。`);
   try {
-    const { task, done } = await api("POST", `/api/tasks/${encodeURIComponent(t.id)}/work`);
-    state.tasks = state.tasks.map((x) => (x.id === t.id ? task : x));
-    toast(done ? `已完成：「${t.title}」` : `「${t.title}」的報告已準備好`);
-    if (partner === "assistant") { await loadTalk(); if (!chatOpen) { unread = true; renderLauncher(); } }
+    await api("POST", `/api/tasks/${encodeURIComponent(t.id)}/work`);
+    toast(`Talent Solutions AI 開始處理「${t.title}」。可在「工作進度」看每一步，停下來時會通知你。`);
+    pollSteps();
   } catch (e) {
     toast(e.message);
     load().catch(() => {});
@@ -853,7 +851,8 @@ async function pollBrowser() {
 
 // -- Progress: the AI's work log, step by step ---------------------------------------------------
 const STEP_LABEL = {
-  task_started: "開始處理任務", task_done: "完成任務", task_paused: "暫停任務（下次再繼續）", task_failed: "任務出錯",
+  task_started: "開始處理任務", task_done: "完成任務", task_paused: "暫停任務", task_failed: "任務出錯",
+  task_report: "進度報告（繼續處理）", task_needs_you: "需要你回答",
   browser: "瀏覽器", web_search: "搜尋網頁", read_webpage: "閱讀網頁", call_api: "查詢系統", query_database: "查詢資料庫",
   commit_code: "提交程式碼", start_task: "交給自己處理", create_task: "新增任務", update_task: "更新任務",
   delete_task: "刪除任務", list_tasks: "查看工作板", save_project: "儲存項目", delete_project: "刪除項目",
@@ -863,7 +862,8 @@ const STEP_LABEL = {
   delete_system: "刪除系統", list_integrations: "查看已連接系統", list_calendar: "查看日曆", consult_partner: "請教 AI 夥伴",
   assistant_status: "查看狀態", set_autopilot: "設定自動執行",
 };
-const MARKS = new Set(["task_started", "task_done", "task_paused", "task_failed"]);
+const MARKS = new Set(["task_started", "task_done", "task_paused", "task_failed", "task_report", "task_needs_you"]);
+const STOPS = new Set(["task_done", "task_paused", "task_failed", "task_needs_you"]);  // a task stopped: tell people
 let stepsData = { steps: [], working: [] };
 
 function stepWho(caller) {
@@ -896,10 +896,45 @@ function renderSteps() {
   }));
 }
 
+// -- telling people when a task stops: a toast, a count on the tab, and a desktop notification if allowed --------
+let seenStep = null;   // the newest stop this browser has told about
+let unseenStops = 0;
+try { seenStep = localStorage.getItem("seenStep"); } catch { /* storage unavailable */ }
+
+function stopText(s) {
+  const head = { task_done: "✅ 完成", task_needs_you: "❓ 需要你", task_paused: "⏸ 暫停", task_failed: "⚠️ 出錯" }[s.tool];
+  return `${head}：${s.detail || ""}`.slice(0, 220);
+}
+
+function announceStops(steps) {
+  const stops = steps.filter((s) => STOPS.has(s.tool));
+  if (!stops.length) return;
+  const newest = stops[0].at;
+  if (seenStep === null) { seenStep = newest; }  // first visit: nothing old to announce
+  const fresh = stops.filter((s) => s.at > seenStep);
+  if (!fresh.length) return;
+  seenStep = newest;
+  try { localStorage.setItem("seenStep", newest); } catch { /* storage unavailable */ }
+  if ($("view-steps").hidden) unseenStops += fresh.length;
+  $("stepsCount").textContent = unseenStops; $("stepsCount").hidden = !unseenStops;
+  toast(fresh.length === 1 ? stopText(fresh[0]) : `${fresh.length} 個任務已停下來，請看「工作進度」。`);
+  if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+    for (const s of fresh.slice(0, 3)) new Notification("Talent Solutions AI", { body: stopText(s), tag: s.id });
+  }
+  load().catch(() => {});  // the board shows the task's new status and report
+  if (partner === "assistant") loadTalk().then(() => { if (!chatOpen) { unread = true; renderLauncher(); } }).catch(() => {});
+}
+
+function renderNotifyButton() {
+  $("enableNotify").hidden = !("Notification" in window) || Notification.permission !== "default";
+}
+$("enableNotify").onclick = async () => { await Notification.requestPermission(); renderNotifyButton(); };
+renderNotifyButton();
+
 let stepsTimer = null;
 async function pollSteps() {
   clearTimeout(stepsTimer);
-  try { stepsData = await api("GET", "/api/steps"); renderSteps(); } catch { /* next time */ }
+  try { stepsData = await api("GET", "/api/steps"); renderSteps(); announceStops(stepsData.steps); } catch { /* next time */ }
   const watching = !$("view-steps").hidden && document.visibilityState === "visible";
   stepsTimer = setTimeout(pollSteps, watching ? 3000 : 20000);  // every 3 s while watched; else just the badge
 }
@@ -911,7 +946,7 @@ function switchTab(name) {
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("active", t.dataset.tab === name);
   for (const v of TABS) $(`view-${v}`).hidden = v !== name;
   if (name === "browser") pollBrowser();
-  if (name === "steps") pollSteps();
+  if (name === "steps") { pollSteps(); unseenStops = 0; $("stepsCount").hidden = true; }
   try { localStorage.setItem("tab", name); } catch { /* storage unavailable */ }
 }
 for (const tab of document.querySelectorAll(".tab")) tab.onclick = () => switchTab(tab.dataset.tab);

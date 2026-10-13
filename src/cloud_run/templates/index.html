@@ -212,7 +212,7 @@
     <button class="tab" data-tab="projects">項目 <span class="count" id="projectCount">0</span></button>
     <button class="tab" data-tab="questions">問題 <span class="count" id="questionCount">0</span></button>
     <button class="tab" data-tab="access">系統權限 <span class="count" id="accessCount">0</span></button>
-    <button class="tab" data-tab="steps">工作進度 <span class="live" id="stepsLive" hidden>工作中</span></button>
+    <button class="tab" data-tab="steps">工作進度 <span class="count hot" id="stepsCount" hidden>0</span> <span class="live" id="stepsLive" hidden>工作中</span></button>
     <button class="tab" data-tab="browser">瀏覽器 <span class="live" id="browserLive" hidden>即時</span></button>
     <button class="tab" data-tab="activity">活動紀錄</button>
   </nav>
@@ -272,7 +272,8 @@
   </section>
 
   <section id="view-steps" hidden>
-    <p class="hint">Talent Solutions AI 每一步的工作紀錄，即時更新。結束對話或通話後，交給它的任務仍會繼續，可以在這裡看到進度。</p>
+    <p class="hint">Talent Solutions AI 每一步的工作紀錄，即時更新。結束對話或通話後，交給它的任務仍會繼續，可以在這裡看到進度；任務停下來時會通知你。
+      <button class="btn" id="enableNotify" hidden>開啟桌面通知</button></p>
     <div id="working"></div>
     <div class="steps" id="steps"></div>
   </section>

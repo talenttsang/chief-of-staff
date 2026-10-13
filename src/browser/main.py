@@ -194,6 +194,8 @@ ELEMENTS_JS = """(max) => {
   return out;
 }"""
 
+FILLABLE_JS = """(el) => el.matches('input:not([type=hidden]):not([type=button]):not([type=submit]), textarea, select, [contenteditable=""], [contenteditable=true]')"""
+
 PICKER_JS = """(el) => el.tagName === 'INPUT' && /^(date|datetime-local|month|week|time|color|range)$/.test(el.type)"""
 
 FIELD_JS = """(el) => [el.type || '', el.name || '', el.id || '', el.getAttribute('autocomplete') || '',
@@ -250,8 +252,9 @@ def _snapshot(sid, session, notes=()):
             "text": text[:TEXT_CHARS] + ("…" if len(text) > TEXT_CHARS else ""), "notes": all_notes}
 
 
-FIELDS = "xpath=following::*[self::input[not(@type='hidden')] or self::select or self::textarea][1]"
-DROPDOWNS = "xpath=following::*[self::select or @aria-haspopup='listbox' or @role='combobox'][1]"
+# A field or dropdown inside the same block as a label that isn't linked to it (<div><label>Age</label><input>).
+FIELDS = "input:not([type=hidden]), select, textarea"
+DROPDOWNS = "select, [aria-haspopup=listbox], [role=combobox]"
 
 
 def _locate(page, target, field=False, dropdown=False):
@@ -262,23 +265,23 @@ def _locate(page, target, field=False, dropdown=False):
     app's own."""
     target = target.strip()
     candidates = []
+    exact = _label(page, target.split(":")[0])
     if re.match(r"^[#.\[]|^[a-z]+[#.\[:]|>", target):
         candidates.append(page.locator(target))
     if field:
         name = target.split(":")[0].strip()  # an elements label: "Date of birth: 1990-01-01"
-        candidates += [page.get_by_label(target), page.get_by_label(name), page.get_by_placeholder(target),
-                       page.locator("label", has_text=name).locator(FIELDS)]
+        candidates += [page.get_by_label(target, exact=True), exact.locator("xpath=..").locator(FIELDS),
+                       page.get_by_label(target), page.get_by_label(name), page.get_by_placeholder(target)]
     if dropdown:
-        name = target.split(":")[0].strip()
-        candidates += [page.get_by_label(target), page.get_by_role("combobox", name=target),
-                       page.locator("label", has_text=name).locator(DROPDOWNS)]
+        candidates += [exact.locator("xpath=..").locator(DROPDOWNS), page.get_by_label(target),
+                       page.get_by_role("combobox", name=target)]
     candidates += [page.get_by_role("button", name=target), page.get_by_role("link", name=target),
                    page.get_by_label(target), page.get_by_placeholder(target), page.get_by_role("option", name=target),
                    page.get_by_text(target, exact=True), page.get_by_text(target)]
     name, _, shown = target.partition(":")
     if shown and not (field or dropdown):  # an elements name, "Label: what it shows": the control after the label
-        label = page.locator("label", has_text=name.strip().rstrip("*").strip())
-        candidates += [label.locator(DROPDOWNS), label.locator(FIELDS)]
+        block = _label(page, name).locator("xpath=..")
+        candidates += [block.locator(DROPDOWNS), block.locator(FIELDS)]
     for loc in candidates:
         try:
             count = loc.count()
@@ -286,8 +289,28 @@ def _locate(page, target, field=False, dropdown=False):
             continue
         for i in range(min(count, 5)):
             item = loc.nth(i)
-            if item.is_visible():
+            if item.is_visible() and (not field or item.evaluate(FILLABLE_JS)):
                 return item
+    return None
+
+
+def _label(page, name):
+    """The <label> reading exactly `name` (give or take a required-field star), not one that merely contains it."""
+    name = name.strip().rstrip("*").strip()
+    return page.locator("label").filter(has_text=re.compile(rf"^\s*{re.escape(name)}\s*\*?\s*$", re.I))
+
+
+def _choice_button(page, target, choice):
+    """An option drawn as buttons or radios (Male / Female chips), next to the label `target` if there is one."""
+    scopes = ([_label(page, target).locator("xpath=..")] if target else []) + [page]
+    for scope in scopes:
+        for loc in (scope.get_by_role("radio", name=choice, exact=True), scope.get_by_role("button", name=choice, exact=True)):
+            try:
+                visible = [loc.nth(i) for i in range(min(loc.count(), 5)) if loc.nth(i).is_visible()]
+            except Exception:  # noqa: BLE001
+                continue
+            if visible:
+                return visible[0]
     return None
 
 
@@ -377,6 +400,10 @@ def act(body):
         text = str(body.get("text") or "")
         if body.get("target"):
             element = _locate(page, str(body["target"]), field=True)
+            beside = _label(page, str(body["target"]).split(":")[0]).locator("xpath=..").locator(DROPDOWNS)
+            if element is None and beside.count() and beside.first.is_visible():
+                return {"error": f"'{body['target']}' is a dropdown, not a text box: use select with text = the choice.",
+                        **_snapshot(sid, session)}
             if element is None:
                 return {"error": f"No field matches '{body['target']}'. Use its label from elements, or x,y.",
                         **_snapshot(sid, session)}
@@ -423,10 +450,18 @@ def act(body):
         page.keyboard.press(str(body.get("key") or "Enter"))
         page.wait_for_timeout(500)
     elif action == "select":
-        element = _locate(page, str(body.get("target") or "select"), dropdown=True)
-        if element is None:
-            return {"error": f"No dropdown matches '{body.get('target')}'.", **_snapshot(sid, session)}
+        target = str(body.get("target") or "")
+        target = "" if target.lower() in ("none", "null") else target
         choice = str(body.get("text") or "")
+        element = _locate(page, target or "select", dropdown=True)
+        button = _choice_button(page, target, choice) if choice else None
+        if button is not None and (element is None or not element.evaluate("(el) => el.tagName === 'SELECT'")):
+            if element is None or not page.locator("[role=listbox]:visible").count():
+                button.click()  # the choices are buttons (chips, radios), not a dropdown
+                page.wait_for_timeout(300)
+                return _snapshot(sid, session, notes)
+        if element is None:
+            return {"error": f"No dropdown or choice matches '{target}' / '{choice}'.", **_snapshot(sid, session)}
         if element.evaluate("(el) => el.tagName === 'SELECT'"):
             element.select_option(label=choice)
         else:  # the app's own dropdown: open it (unless it's open already), then click the option

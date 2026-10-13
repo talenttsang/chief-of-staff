@@ -20,6 +20,7 @@ import databases
 import github_code
 import integrations
 import knowledge
+import worker
 from store import utcnow_iso
 
 MAX_RESULT_CHARS = 12000
@@ -352,6 +353,10 @@ class Toolset:
         if task.get("status") == "done":
             return {"error": "that task is already done; reopen it (update_task status todo) first"}
         self.store.save_task(task_id, {"owner": "Assistant", "owner_is_me": False, "updated_at": utcnow_iso()})
+        if worker.busy_count(self.store) >= worker.MAX_PARALLEL:
+            return {"queued": True, "title": task.get("title", ""),
+                    "note": f"{worker.MAX_PARALLEL} tasks are being worked already; it's yours now and the next hourly "
+                            "run starts it."}
         self.starter(task_id)
         return {"started": True, "title": task.get("title", ""),
                 "note": "Working in the background now; it continues after this conversation ends. Tell them they "

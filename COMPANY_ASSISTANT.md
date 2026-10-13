@@ -116,14 +116,26 @@ can't change data (it prepares the exact change and asks for your OK). When a ta
 is finished it marks it done. Its report appears on the task (and a 🤖 report badge
 on the card) and in Talent Solutions AI's chat conversation.
 
-In a chat or on a call, Talent Solutions AI hands longer work to itself with `start_task`: it becomes the
-task's owner and the work starts at once in the background, so it goes on after the chat or call ends. The app
-calls its own `POST /work/<id>` (with the run token) rather than starting a thread, because Cloud Run only gives
-a container CPU while it serves a request. If that work is cut off, the hourly run picks the task up again.
+In a chat or on a call, Talent Solutions AI hands longer work to itself with `start_task`, and the board's
+**🤖 Give to Talent Solutions AI** does the same: it becomes the task's owner and the work starts at once in the
+background, so it goes on after the chat or call ends. The app calls its own `POST /work/<id>` (with the run
+token) rather than starting a thread, because Cloud Run only gives a container CPU while it serves a request.
+At most `MAX_PARALLEL` (3) tasks are worked at once; more wait for the hourly run.
+
+A handed-over task goes on round after round (each round is one model turn of up to 24 tool calls), up to
+`WORK_ROUNDS` (8), until it's done, it asks Manne a question, or a round gets nowhere (no tool calls, or most of
+them failed). A task left open is picked up again by the hourly run after six hours.
+
+Problems it finds while working (a bug, an error, a step a user can't get past) go on the board as their own
+tasks, with the steps to reproduce, and it starts them at once: working such a task means finding the code,
+fixing it with `commit_code`, checking the deploy and testing again. Trouble with its own browser isn't filed.
 
 **工作進度 (Progress tab)** shows every step as it happens: each tool call (a short summary, never file
-contents), and each task started, finished, paused or failed, with who did it (typed, on a call, or working a
-task). It refreshes every 3 seconds while open, and the tab shows 工作中 whenever a task is being worked.
+contents), and each task started, reported on, finished, paused or failed, with who did it (typed, on a call, or
+working a task). It refreshes every 3 seconds while open, and the tab shows 工作中 whenever a task is being worked.
+When a task stops (done, needs you, paused, failed) every open page shows a message, the tab counts the stops
+you haven't seen, the board and chat refresh, and with **開啟桌面通知** the browser also shows a desktop
+notification while the page is in the background.
 Steps are kept for a week (`chat_assistant_steps`, pruned by the hourly run).
 
 ## Changing code and deploying, on its own
