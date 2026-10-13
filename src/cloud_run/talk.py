@@ -100,6 +100,11 @@ def system_prompt(store, partner, voice=False, consulted=False, owner_email="man
     return "\n\n".join(parts)
 
 
+# A consulted partner, or the interview digesting an answer, can't change settings, code, or remove anything.
+NOT_FOR_PARTNERS = ("set_autopilot", "consult_partner", "commit_code", "delete_question", "delete_task",
+                    "delete_project", "delete_fact", "delete_system")
+
+
 class Talk:
     def __init__(self, store, secrets, google_factory, owner_email):
         self.store = store
@@ -128,7 +133,7 @@ class Talk:
             if not ok:
                 return f"({PARTNERS[partner].LABEL} isn't available: {why})"
             toolset = Toolset(self.store, self._google(), caller=partner, secrets=self.secrets, may_change=False,
-                              exclude=("set_autopilot", "consult_partner", "commit_code", "delete_question"))
+                              exclude=NOT_FOR_PARTNERS)
             result = PARTNERS[partner].respond(
                 system_prompt(self.store, partner, consulted=True, owner_email=self.owner_email),
                 [{"role": "user", "text": f"Request from the {caller}: {request}"}],
@@ -163,7 +168,7 @@ class Talk:
     def digest_answer(self, question, answer):
         """Fold an answer from the Questions tab into the knowledge base using the assistant's tools."""
         toolset = Toolset(self.store, self._google(), caller="interview", may_change=False,
-                          exclude=("set_autopilot", "consult_partner", "call_api", "commit_code"))
+                          exclude=NOT_FOR_PARTNERS + ("call_api",))
         prompt = (f"Manne answered a question from your queue.\n\nQuestion [{question['id']}]: {question['question']}\n\n"
                   f"Answer: {answer}\n\nUpdate the knowledge base from this answer: save or update every project it "
                   "mentions (save_project), record each distinct fact (record_fact), add tasks it implies "

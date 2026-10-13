@@ -31,8 +31,11 @@ not be the owner. The models ask who it is when it matters (an approval, a fact 
 - **Company background**: `src/cloud_run/knowledge/company.md`, given to every model. Keep it current there.
 - **Conversations and answers**: the models record what they learn with tools (`save_project`,
   `record_fact`, `ask_owner`, `request_access`, ...).
-- **Clearing out**: `delete_question` removes a question that isn't relevant (e.g. about another app),
-  answered or not, together with its recorded answer.
+- **Keeping the board tidy**: the AI adds, changes and removes anything on it on its own: tasks
+  (`create_task`, `update_task`, `delete_task`), projects (`save_project`, `delete_project`; their tasks stay,
+  unlinked), facts (`record_fact`, `delete_fact`), questions (`ask_owner`, `delete_question`, which removes the
+  recorded answer too) and Access rows (`request_access`, `update_system`, `delete_system`). Every removal is
+  listed under Activity. A consulted partner can't remove anything.
 - It starts with the round-1 interview questions and the known systems list, seeded once.
 
 ## What it may do on its own (tiered autonomy)

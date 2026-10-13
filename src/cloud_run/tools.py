@@ -86,9 +86,19 @@ SPECS = [
      _obj({"status": _S, "mine": _B, "query": _S})),
     ("create_task", "Add a task to the board.", _obj(_TASK_FIELDS, ["title"])),
     ("update_task", "Change a board task.", _obj({"task_id": _S, **_TASK_FIELDS}, ["task_id"])),
+    ("delete_task", "Remove a task from the board entirely (duplicates, mistakes, things that no longer apply). "
+     "For finished work set status done instead, so it stays on record.", _obj({"task_id": _S}, ["task_id"])),
+    ("delete_project", "Remove a project entirely (not relevant, a duplicate, another business's). Its tasks stay on "
+     "the board, unlinked.", _obj({"project_id": _S}, ["project_id"])),
+    ("delete_fact", "Remove a recorded fact that is wrong or not relevant (find its id with search_knowledge).",
+     _obj({"fact_id": _S}, ["fact_id"])),
     ("list_systems", "Systems the assistant can use now, and those it still needs access to.", _obj({})),
     ("request_access", "Record that you need access to a system, why, and what it would unlock.",
      _obj({"system": _S, "why": _S, "unlocks": _S}, ["system", "why"])),
+    ("update_system", "Change a row on the Access tab: its status, name, category, or what it unlocks.",
+     _obj({"system_id": _S, "status": {"type": "string", "enum": ["connected", "available", "needed", "requested", "not_used"]}, "name": _S, "category": _S,
+           "unlocks": _S}, ["system_id"])),
+    ("delete_system", "Remove a row from the Access tab that isn't relevant.", _obj({"system_id": _S}, ["system_id"])),
     ("assistant_status", "The assistant's own state: current run progress, last run, counts, autopilot on/off.",
      _obj({})),
     ("set_autopilot", "Turn automatic actions on or off (off = everything waits for the owner's approval).",
@@ -312,6 +322,57 @@ class Toolset:
             return {"error": "no such task"}
         changes = {k: v for k, v in fields.items() if k in _TASK_FIELDS}
         return {"task": self.store.save_task(task_id, {**changes, "updated_at": utcnow_iso()})}
+
+    def _removed(self, what, label):
+        """Deletions are listed under Activity, so people can see what the AI took off the board."""
+        now = utcnow_iso()
+        self.store.save_action(knowledge.slug(f"del{what}{label}{now}", "a-"), {
+            "type": "system_change", "status": "done", "space_label": "Board", "reply_text": f"Removed {what}: {label}"[:300],
+            "source_from": self.caller, "reason": f"removed by {self.caller}", "sent_by": "assistant",
+            "created_at": now, "executed_at": now})
+
+    def _t_delete_task(self, task_id):
+        task = self.store.get_task(task_id)
+        if not task:
+            return {"error": "no such task"}
+        self.store.delete_task(task_id)
+        self._removed("task", task.get("title", task_id))
+        return {"deleted": True, "title": task.get("title", "")}
+
+    def _t_delete_project(self, project_id):
+        project = self.store.get_item("projects", project_id)
+        if not project:
+            return {"error": "no such project; find its id with list_projects"}
+        self.store.delete_item("projects", project_id)
+        unlinked = 0
+        for task in self.store.list_tasks():
+            if task.get("project_id") == project_id:
+                self.store.save_task(task["id"], {"project_id": "", "updated_at": utcnow_iso()})
+                unlinked += 1
+        self._removed("project", project.get("name", project_id))
+        return {"deleted": True, "name": project.get("name", ""), "tasks_unlinked": unlinked}
+
+    def _t_delete_fact(self, fact_id):
+        fact = self.store.get_item("facts", fact_id)
+        if not fact:
+            return {"error": "no such fact; find its id with search_knowledge"}
+        self.store.delete_item("facts", fact_id)
+        self._removed("fact", fact.get("text", fact_id)[:120])
+        return {"deleted": True}
+
+    def _t_update_system(self, system_id, **fields):
+        if not self.store.get_item("systems", system_id):
+            return {"error": "no such system; see list_systems"}
+        changes = {k: str(v)[:500] for k, v in fields.items() if k in ("status", "name", "category", "unlocks") and v}
+        return {"system": self.store.save_item("systems", system_id, {**changes, "updated_at": utcnow_iso()})}
+
+    def _t_delete_system(self, system_id):
+        system = self.store.get_item("systems", system_id)
+        if not system:
+            return {"error": "no such system; see list_systems"}
+        self.store.delete_item("systems", system_id)
+        self._removed("Access row", system.get("name", system_id))
+        return {"deleted": True, "name": system.get("name", "")}
 
     # -- systems & self ----------------------------------------------------------------
     def _t_list_systems(self):

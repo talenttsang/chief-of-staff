@@ -102,6 +102,28 @@ class ToolTests(unittest.TestCase):
         self.assertIsNone(self.store.get_item("questions", q["id"]))
         self.assertFalse(any("Dismissed" in f["text"] for f in self.store.list_items("facts")))
 
+    def test_the_ai_can_remove_anything_on_the_board_and_it_is_logged(self):
+        p = self.tools.call("save_project", {"name": "Old Salon Launch", "company": "superhairpieces"})["project"]
+        t = self.tools.call("create_task", {"title": "Call the salon", "project_id": p["id"]})["task"]
+        keep = self.tools.call("create_task", {"title": "Ship HelperXpress onboarding"})["task"]
+        f = knowledge.add_fact(self.store, "Kathy runs Dufferin")
+        self.assertEqual(self.tools.call("delete_project", {"project_id": p["id"]})["tasks_unlinked"], 1)
+        self.assertEqual(self.store.get_task(t["id"])["project_id"], "")
+        self.assertTrue(self.tools.call("delete_task", {"task_id": t["id"]})["deleted"])
+        self.assertTrue(self.tools.call("delete_fact", {"fact_id": f["id"]})["deleted"])
+        self.assertEqual(self.tools.call("update_system", {"system_id": "hosting", "status": "connected"})["system"]["status"],
+                         "connected")
+        self.assertTrue(self.tools.call("delete_system", {"system_id": "error_tracking"})["deleted"])
+        self.assertEqual([x["id"] for x in self.store.list_tasks()], [keep["id"]])
+        self.assertIsNone(self.store.get_item("projects", p["id"]))
+        self.assertIsNone(self.store.get_item("facts", f["id"]))
+        self.assertIsNone(self.store.get_item("systems", "error_tracking"))
+        logged = " | ".join(a["reply_text"] for a in self.store.list_actions())
+        for what in ("Removed task: Call the salon", "Removed project: Old Salon Launch", "Removed fact: Kathy",
+                     "Removed Access row"):
+            self.assertIn(what, logged)
+        self.assertIn("error", self.tools.call("delete_task", {"task_id": "nope"}))
+
     def test_tasks_systems_status_autopilot(self):
         t = self.tools.call("create_task", {"title": "Call SkuVault", "priority": "high"})["task"]
         self.tools.call("update_task", {"task_id": t["id"], "status": "done"})
@@ -179,6 +201,7 @@ class TalkTests(unittest.TestCase):
         self.assertNotIn("set_autopilot", tools)
         self.assertNotIn("consult_partner", tools)
         self.assertNotIn("delete_question", tools)
+        self.assertNotIn("delete_task", tools)
         self.assertIn("consulted by the company's AI assistant", self.fake["claude"].calls[-1]["system"])
 
     def test_partners_switch_off(self):
