@@ -43,6 +43,7 @@ from google_apis import (ASSISTANT_SCOPES, IDENTITY_SCOPES, GoogleClient, creden
                          naive_utc_expiry)
 from store import AUTONOMY_CATEGORIES, make_secrets, make_store, utcnow_iso
 from talk import PARTNERS, Talk
+from tools import NOT_AN_ANSWER
 
 # Google may grant scopes in a different spelling/order than requested.
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
@@ -484,6 +485,9 @@ def api_answer_question(question_id):
     answer = str((request.get_json(force=True) or {}).get("answer", "")).strip()
     if not answer:
         return jsonify(error="Type an answer first."), 400
+    if NOT_AN_ANSWER.match(answer):  # "not relevant": remove the question rather than keep it as answered
+        store.delete_item("questions", question_id)
+        return jsonify(question=None, note="Removed: it isn't relevant.", tools=[])
     now = utcnow_iso()
     store.save_item("questions", question_id, {"status": "answered", "answer": answer[:8000], "answered_at": now,
                                                "updated_at": now})
@@ -500,10 +504,11 @@ def api_answer_question(question_id):
 
 @app.post("/api/questions/<question_id>/dismiss")
 def api_dismiss_question(question_id):
+    """Skip: the question is removed entirely, not kept as "dismissed"."""
     if not store.get_item("questions", question_id):
         return jsonify(error="No such question."), 404
-    return jsonify(question=store.save_item("questions", question_id, {"status": "dismissed",
-                                                                       "updated_at": utcnow_iso()}))
+    store.delete_item("questions", question_id)
+    return jsonify(deleted=True)
 
 
 @app.post("/api/questions")

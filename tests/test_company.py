@@ -95,6 +95,13 @@ class ToolTests(unittest.TestCase):
         self.assertEqual([f["id"] for f in self.store.list_items("facts")], [keep["id"]])
         self.assertIn("error", self.tools.call("delete_question", {"question_id": q["id"]}))
 
+    def test_a_not_relevant_answer_removes_the_question(self):
+        q = self.tools.call("ask_owner", {"question": "Which store hash is the NL site?", "why": "old app"})
+        result = self.tools.call("answer_question", {"question_id": q["id"], "answer": "Dismissed as not relevant"})
+        self.assertTrue(result["deleted"])
+        self.assertIsNone(self.store.get_item("questions", q["id"]))
+        self.assertFalse(any("Dismissed" in f["text"] for f in self.store.list_items("facts")))
+
     def test_tasks_systems_status_autopilot(self):
         t = self.tools.call("create_task", {"title": "Call SkuVault", "priority": "high"})["task"]
         self.tools.call("update_task", {"task_id": t["id"], "status": "done"})
@@ -1216,6 +1223,14 @@ class WebTests(unittest.TestCase):
         self.assertEqual(r["note"], "assistant here")
         self.assertTrue(any("cosmetics" in f["text"] for f in self.store.list_items("facts")))
         self.assertEqual(self.call("POST", f"/api/questions/{q['id']}/answer", {"answer": ""}).status_code, 400)
+
+    def test_skip_and_not_relevant_remove_questions_entirely(self):
+        a = knowledge.add_question(self.store, "Old app question one?")
+        b = knowledge.add_question(self.store, "Old app question two?")
+        self.assertTrue(self.call("POST", f"/api/questions/{a['id']}/dismiss").get_json()["deleted"])
+        self.call("POST", f"/api/questions/{b['id']}/answer", {"answer": "not relevant"})
+        ids = {q["id"] for q in self.call("GET", "/api/knowledge").get_json()["questions"]}
+        self.assertFalse({a["id"], b["id"]} & ids)
 
     def test_projects_systems_settings(self):
         p = self.call("POST", "/api/projects", {"name": "Brampton launch", "company": "superhairpieces"}).get_json()["project"]

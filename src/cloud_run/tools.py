@@ -23,6 +23,8 @@ import knowledge
 from store import utcnow_iso
 
 MAX_RESULT_CHARS = 12000
+# An "answer" that only sets a question aside; such questions are deleted instead of shown as answered.
+NOT_AN_ANSWER = re.compile(r"^\W*(dismiss(ed)?|skip(ped)?|not relevant|irrelevant|n/?a)\b", re.I)
 # The browser service (src/browser), called with Talent Solutions AI's own identity. Empty: the browser tool isn't offered.
 BROWSER_URL = os.environ.get("BROWSER_URL", "").rstrip("/")
 BROWSER_ACTIONS = ["open", "goto", "click", "type", "press", "select", "scroll", "back", "forward", "reload",
@@ -70,11 +72,12 @@ SPECS = [
                                                             "policy", "goal", "general"]},
            "project_id": _S}, ["text"])),
     ("list_questions", "List questions waiting for the owner (status open) or answered ones.",
-     _obj({"status": {"type": "string", "enum": ["open", "answered", "dismissed"]}})),
+     _obj({"status": {"type": "string", "enum": ["open", "answered"]}})),
     ("ask_owner", "Queue a question for the owner when you need information you can't find yourself.",
      _obj({"question": _S, "why": {**_S, "description": "What the answer unlocks"}, "project_id": _S,
            "priority": {**_I, "description": "1 urgent, 2 normal, 3 later"}}, ["question", "why"])),
-    ("answer_question", "Record the owner's answer to a queued question (use when they answer it in conversation).",
+    ("answer_question", "Record the owner's answer to a queued question (use when they answer it in conversation). "
+     "Never use it to set a question aside: for one that isn't relevant, use delete_question.",
      _obj({"question_id": _S, "answer": _S}, ["question_id", "answer"])),
     ("delete_question", "Remove a question that isn't relevant (e.g. about another app or business), answered or "
      "not. Its recorded answer goes too, unless keep_answer=true. Say which ones you removed and why.",
@@ -277,6 +280,8 @@ class Toolset:
         q = self.store.get_item("questions", question_id)
         if not q:
             return {"error": "no such question"}
+        if NOT_AN_ANSWER.match(answer or ""):  # "Dismissed as not relevant" is a removal, not an answer
+            return dict(self._t_delete_question(question_id), note="removed it: that isn't an answer")
         now = utcnow_iso()
         self.store.save_item("questions", question_id, {"status": "answered", "answer": answer[:4000],
                                                         "answered_at": now, "updated_at": now})
