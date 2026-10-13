@@ -35,6 +35,18 @@ class BrowserToolTests(unittest.TestCase):
     def toolset(self, **kw):
         return Toolset(MemoryStore(), None, caller="assistant", **kw)
 
+    def test_each_step_updates_the_screen_people_watch(self):
+        store = MemoryStore()
+        ts = Toolset(store, None, caller="claude")
+        ts.call("browser", {"action": "open", "url": "https://www.superhairpieces.com/"})
+        view = store.list_browser_views()[0]
+        self.assertEqual((view["id"], view["action"], view["image"], view["closed"]), ("claude", "open", "SU1BR0U=", False))
+        with mock.patch.object(tools, "_browser_call", return_value={"session": "s1", "error": "No field matches 'x'."}):
+            ts.call("browser", {"action": "click", "target": "x"})
+        view = store.list_browser_views()[0]
+        self.assertEqual((view["action"], view["image"]), ("click", "SU1BR0U="))  # the last screen stays
+        self.assertIn("No field", view["error"])
+
     def test_sign_in_uses_the_secret_login_and_never_shows_it(self):
         login = {"url": "https://app.example/test-login?role=helper",
                  "fields": [{"target": "#key", "value": "s3cret-key"}], "submit": "#go"}

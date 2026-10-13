@@ -811,12 +811,50 @@ $("runNow").onclick = async () => {
 
 $("logout").onclick = async () => { await api("POST", "/logout").catch(() => {}); location.reload(); };
 
+// -- Browser: watch the AI's browser ---------------------------------------------------------
+const LIVE_MS = 30 * 1000;  // a screen this fresh means the AI is at it now
+let browserViews = [];
+const isLiveView = (v) => !v.closed && Date.now() - new Date(v.at).getTime() < LIVE_MS;
+
+function renderBrowser() {
+  $("browserLive").hidden = !browserViews.some(isLiveView);
+  const box = $("screens");
+  if (!browserViews.length) {
+    box.replaceChildren(el("div", { class: "empty" }, "The AI hasn't used its browser yet. Ask it to check a page, and watch here."));
+    return;
+  }
+  const keep = new Map([...box.querySelectorAll(".screen")].map((n) => [n.dataset.id, n]));
+  box.replaceChildren(...browserViews.map((v) => {
+    const old = keep.get(v.id);
+    if (old && old.dataset.at === v.at) { old.querySelector(".when").textContent = ago(v.at); return old; }  // no flicker
+    const link = safeUrl(v.url);
+    return el("div", { class: `screen${v.device === "mobile" ? " phone" : ""}`, "data-id": v.id, "data-at": v.at },
+      el("div", { class: "top" },
+        el("b", {}, partnerInfo(v.caller).label || v.caller),
+        isLiveView(v) ? el("span", { class: "live" }, "live") : el("span", {}, v.closed ? "closed" : "idle"),
+        el("span", {}, `· ${v.action}`),
+        el("span", { class: "when" }, ago(v.at)),
+        link ? el("a", { href: link, target: "_blank", rel: "noopener" }, v.title || v.url) : el("span", {}, v.title || "")),
+      v.image ? el("img", { src: `data:image/jpeg;base64,${v.image}`, alt: `Screenshot of ${v.title || v.url || "the page"}` }) : null,
+      v.error ? el("div", { class: "err" }, v.error) : null);
+  }));
+}
+
+let browserTimer = null;
+async function pollBrowser() {
+  clearTimeout(browserTimer);
+  try { browserViews = (await api("GET", "/api/browser")).views || []; renderBrowser(); } catch { /* next time */ }
+  const watching = !$("view-browser").hidden && document.visibilityState === "visible";
+  browserTimer = setTimeout(pollBrowser, watching ? 2000 : 20000);  // every 2 s while watched; else just the badge
+}
+
 // -- tabs ---------------------------------------------------------------------------------
-const TABS = ["board", "projects", "questions", "access", "activity"];  // the chat isn't a tab: it floats over all of them
+const TABS = ["board", "projects", "questions", "access", "browser", "activity"];  // the chat isn't a tab: it floats over all of them
 function switchTab(name) {
   if (!TABS.includes(name)) name = "board";  // e.g. "talk", remembered from before the chat window
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("active", t.dataset.tab === name);
   for (const v of TABS) $(`view-${v}`).hidden = v !== name;
+  if (name === "browser") pollBrowser();
   try { localStorage.setItem("tab", name); } catch { /* storage unavailable */ }
 }
 for (const tab of document.querySelectorAll(".tab")) tab.onclick = () => switchTab(tab.dataset.tab);
@@ -829,6 +867,7 @@ window.companyAssistant = { el, toast, api, renderThread, turnNode, loadTalk, re
   try { tab = localStorage.getItem("tab") || "board"; } catch { /* storage unavailable */ }
   switchTab(tab);
   try { await load(); afterConnectRedirect(); await loadTalk(); await pollProgress(); } catch (e) { $("lastrun").textContent = e.message; }
+  if (!browserTimer) pollBrowser();
 })();
 // Every minute: notice an hourly run starting, and refresh unless a dialog is open or a reply is pending.
 setInterval(() => {

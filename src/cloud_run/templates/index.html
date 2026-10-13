@@ -74,6 +74,15 @@
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
     .empty { color: var(--faint); text-align: center; padding: 18px 8px; font-size: 13px; }
     section h3 { font-size: 15px; font-weight: 500; margin: 18px 0 10px; }
+    .screen { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+    .screen .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .screen .top a { overflow-wrap: anywhere; }
+    .screen img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+    .screen.phone img { max-width: min(390px, 100%); }
+    .screen .err { color: var(--bad, #b42318); font-size: 13px; margin-top: 6px; }
+    .live { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--good, #067647); font-weight: 600; }
+    .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: blink 1.2s infinite; }
+    @keyframes blink { 50% { opacity: .25; } }
     .item { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
     .item .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
     .item .q { font-weight: 500; margin: 2px 0 4px; overflow-wrap: anywhere; }
@@ -193,6 +202,7 @@
     <button class="tab" data-tab="projects">Projects <span class="count" id="projectCount">0</span></button>
     <button class="tab" data-tab="questions">Questions <span class="count" id="questionCount">0</span></button>
     <button class="tab" data-tab="access">Access <span class="count" id="accessCount">0</span></button>
+    <button class="tab" data-tab="browser">Browser <span class="live" id="browserLive" hidden>live</span></button>
     <button class="tab" data-tab="activity">Activity</button>
   </nav>
 
@@ -249,6 +259,11 @@
       <span class="hint">Connect everything asks Google once for your OK as the project owner, gives the app access to
         each stored key it needs, and tests every system. Keys stay on the server; the AI never sees them.</span></p>
     <div id="systems"></div>
+  </section>
+
+  <section id="view-browser" hidden>
+    <p class="hint">What Talent Solutions AI sees in its web browser: the latest screen after each step, updated live while it works.</p>
+    <div id="screens"></div>
   </section>
 
   <section id="view-activity" hidden>

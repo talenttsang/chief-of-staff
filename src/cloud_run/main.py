@@ -790,6 +790,12 @@ def do_run(trigger):
         store.release_run_lock()
 
 
+@app.get("/api/browser")
+def api_browser():
+    """The AI's browser screen, as each partner last left it; the Browser tab polls it while open."""
+    return jsonify(views=store.list_browser_views())
+
+
 @app.get("/api/progress")
 def api_progress():
     """Small and cheap, so the page can poll it every couple of seconds during a run."""

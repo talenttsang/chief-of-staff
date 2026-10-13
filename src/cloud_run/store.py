@@ -219,6 +219,13 @@ class MemoryStore:
         self._set("chat_assistant_runs", run_id, summary)
         return run_id
 
+    # -- the AI's browser screen, as each partner last left it (the Browser tab shows it) --------------------
+    def save_browser_view(self, caller, view):
+        self._set("chat_assistant_browser", caller.replace("/", "-"), view, merge=True)
+
+    def list_browser_views(self):
+        return sorted(self._list("chat_assistant_browser"), key=lambda v: v.get("at", ""), reverse=True)
+
     def list_runs(self, limit=20):
         return sorted(self._list("chat_assistant_runs"), key=lambda r: r.get("started_at", ""), reverse=True)[:limit]
 

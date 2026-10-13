@@ -372,6 +372,18 @@ class Toolset:
         meta = data.get("metadata") or {}
         return {"url": url, "title": meta.get("title"), "text": (data.get("markdown") or "")[:9000]}
 
+    def _show_screen(self, action, out, image):
+        """Keep the latest screen for the Browser tab, so people can watch what the AI is doing."""
+        try:
+            view = {"at": utcnow_iso(), "action": action, "caller": self.caller, "closed": bool(out.get("closed")),
+                    "error": str(out.get("error") or "")[:300]}
+            view.update({k: out[k] for k in ("url", "title", "device") if out.get(k)})
+            if image:
+                view["image"] = image
+            self.store.save_browser_view(self.caller, view)
+        except Exception as exc:  # noqa: BLE001 - the screen is a courtesy; the browser call already worked
+            print(f"browser view not saved: {exc!r}")
+
     def _test_login(self, account):
         """A test account's login from the BROWSER_ACCOUNTS secret; only the server ever holds it."""
         if account not in BROWSER_ACCOUNTS:
@@ -410,6 +422,7 @@ class Toolset:
         image = result.pop("image", None)
         out = {k: result[k] for k in ("error", "url", "title", "device", "viewport", "scroll", "notes", "closed")
                if result.get(k) not in (None, "", [])}
+        self._show_screen(action, out, image)
         if result.get("elements"):
             out["elements"] = [f"{e['kind']} '{e['label']}' at {e['x']},{e['y']}" for e in result["elements"]]
         if result.get("text"):

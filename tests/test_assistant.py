@@ -115,6 +115,13 @@ class WebTests(unittest.TestCase):
         progress = self.call("GET", "/api/progress").get_json()
         self.assertEqual((progress["running"], progress["phase"]), (False, "Done"))
 
+    def test_browser_screens_need_sign_in(self):
+        self.store.save_browser_view("assistant", {"at": "2026-10-13T04:00:00+00:00", "action": "open", "image": "AA=="})
+        self.assertEqual(self.call("GET", "/api/browser").status_code, 401)
+        self.sign_in()
+        views = self.call("GET", "/api/browser").get_json()["views"]
+        self.assertEqual((views[0]["id"], views[0]["image"]), ("assistant", "AA=="))
+
     def test_settings_only_known_keys(self):
         self.sign_in()
         s = self.call("PATCH", "/api/settings", {"auto_act": False, "evil": True}).get_json()["settings"]
