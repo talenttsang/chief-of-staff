@@ -61,8 +61,12 @@ one secret at a time, never project-wide, and Firestore access only to the
 
 ## Deploying
 
-From the repo root (Cloud Shell or any machine with gcloud signed in to
-`helperexpress-hk`):
+Every push to `main` deploys: `.github/workflows/deploy.yml` runs the tests, then
+`gcloud run deploy` as `github-deploy@helperexpress-hk` (Workload Identity
+Federation, `main` only). Talent Solutions AI commits to `main` itself
+(`commit_code`, see COMPANY_ASSISTANT.md), so `main` can move under you: pull
+before you work. By hand, from the repo root (Cloud Shell or any machine with
+gcloud signed in to `helperexpress-hk`):
 
 ```
 gcloud run deploy chat-assistant --source src/cloud_run --region us-central1 --project helperexpress-hk
@@ -70,7 +74,7 @@ gcloud run deploy chat-assistant --source src/cloud_run --region us-central1 --p
 
 The service keeps its settings between deploys (`OWNER_EMAIL`, `GCP_PROJECT`,
 `FIRESTORE_DATABASE=chat-assistant`, `DATABASES=helperxpress=SUPABASE_DB_URL`,
-`GOOGLE_ACCOUNT`, `INTEGRATIONS`, `BROWSER_URL`, `PUBLIC_URL`).
+`GOOGLE_ACCOUNT`, `INTEGRATIONS`, `CODE_REPOS`, `BROWSER_URL`, `PUBLIC_URL`).
 Roll back with `gcloud run services update-traffic chat-assistant --to-revisions <revision>=100 ...`.
 
 ---

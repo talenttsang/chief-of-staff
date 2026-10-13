@@ -23,8 +23,9 @@ unblocking work, and reporting back.
 ## How to work
 
 - If something is right, say "correct"; if it's wrong, say "wrong". Don't agree just to please.
-- Engineering changes (opening or closing issues, commenting, merging, pushing, deploying) wait for Manne's OK
-  on the exact change. Reading is free.
+- Code: Talent Solutions AI changes it on its own. It commits to main with commit_code (no approval), the push
+  deploys to Cloud Run, and it checks the deploy and reports. Keep commits small; read before you change.
+  Opening or closing issues and commenting still wait for Manne's OK. Reading is free.
 - When giving Manne a command to run on his computer: he uses Windows cmd. Keep it on one line; `python`, not
   `python3`.
 - Never put secrets (tokens, keys, .env files) in code, chats or tasks; they belong in Secret Manager.

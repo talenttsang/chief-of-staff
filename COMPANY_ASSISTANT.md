@@ -111,6 +111,27 @@ can't change data (it prepares the exact change and asks for your OK). When a ta
 is finished it marks it done. Its report appears on the task (and a 🤖 report badge
 on the card) and in Talent Solutions AI's chat conversation.
 
+## Changing code and deploying, on its own
+
+The owner chose full autonomy for code. `commit_code` makes one commit straight to `main` of a repository in
+`CODE_REPOS` (`github_code.py`), with no approval, typed, on a call or working a task alone. The push starts the
+repository's GitHub Actions workflow (`.github/workflows/deploy.yml`), which runs the checks (the tests here;
+`npm run check` in helperxpress) and, if they pass, deploys to Cloud Run. The assistant then reads the workflow
+run (`call_api GET /repos/{owner}/{repo}/actions/runs?head_sha=…`) and reports. Every commit is listed under
+Activity with its link.
+
+| Repository | Deploys to |
+|---|---|
+| `talenttsang/chief-of-staff` | Cloud Run `chat-assistant` (us-central1): Talent Solutions AI itself |
+| `Talent-Solutions-Limited/helperxpress` | Cloud Run `helperexpress` (asia-east1): the HelperXpress app |
+
+Limits that hold whatever a model asks: only those repositories; nothing under `.github/` (the checks and the
+deploy stay as people set them up); no path outside the repository; at most 50 files and 500 KB each per commit;
+a commit only ever adds to `main`, never rewrites it; consulted partners and the interview can't commit. GitHub
+signs in to Google as `github-deploy@helperexpress-hk` through Workload Identity Federation, only from `main` of
+those two repositories, so no Google key is stored anywhere. To undo a change, revert its commit (that deploys
+too) or move Cloud Run traffic back to the previous revision.
+
 ## Company systems
 
 Every partner (typed or on a call) has two tools for company systems:
@@ -120,7 +141,7 @@ offers only those named in `INTEGRATIONS`. The live app offers:
 
 | System | How it connects |
 |---|---|
-| GitHub | A token pasted in the Access tab (`GITHUB_TOKEN`): repositories, issues, pull requests, CI |
+| GitHub | The `GITHUB_TOKEN` secret: repositories, issues, pull requests, CI; and code changes with `commit_code` |
 | HelperXpress database | `query_database` on the Postgres URL in `SUPABASE_DB_URL` (`DATABASES=helperxpress=SUPABASE_DB_URL`) |
 | Gmail, Calendar, Drive | Connect Google, as helperxpresss@gmail.com |
 | Drive folders and calendars shared with Talent Solutions AI | Shared with chat-assistant@helperexpress-hk.iam.gserviceaccount.com; nothing to connect |

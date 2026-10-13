@@ -66,7 +66,8 @@ the app's secrets and the hourly job.
    `chat-assistant-oauth-client`:
    - `https://chat-assistant-f2n7veewpa-uc.a.run.app/oauth/callback`
    - `https://chat-assistant-943501248136.us-central1.run.app/oauth/callback`
-3. **Deploy** from the repo root:
+3. **Deploy**: every push to `main` runs the tests and deploys
+   (`.github/workflows/deploy.yml`). By hand, from the repo root:
    ```
    gcloud run deploy chat-assistant --source src/cloud_run --region us-central1 --project helperexpress-hk
    ```
@@ -88,6 +89,7 @@ Live values are set on the Cloud Run service.
 | `FIRESTORE_DATABASE` | `chat-assistant` | `(default)` |
 | `DATABASES` | `helperxpress=SUPABASE_DB_URL` | none (`name=SECRET` pairs; the secret holds a postgres:// URL) |
 | `INTEGRATIONS` | `github` | every connector in `integrations.py` |
+| `CODE_REPOS` | `talenttsang/chief-of-staff,Talent-Solutions-Limited/helperxpress` | none (no `commit_code` tool) |
 | `BROWSER_URL` | the `web-browser` service | none (no browser tool) |
 | `PUBLIC_URL` | the service's URL | the request's host |
 | `TIME_ZONE` | | `America/Toronto` |

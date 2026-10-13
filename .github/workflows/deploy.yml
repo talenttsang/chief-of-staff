@@ -1,0 +1,46 @@
+# Every push to main is tested, then deployed to Cloud Run (chat-assistant, us-central1).
+# GitHub signs in to Google as github-deploy@helperexpress-hk through Workload Identity Federation:
+# no key is stored here, and only main of this repository may sign in.
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-chat-assistant
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r src/cloud_run/requirements.txt
+      - run: python -m unittest discover -s tests
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/943501248136/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@helperexpress-hk.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Deploy
+        run: gcloud run deploy chat-assistant --source src/cloud_run --region us-central1 --project helperexpress-hk --quiet
+      - name: Check it answers
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://chat-assistant-f2n7veewpa-uc.a.run.app/health)
+          echo "/health answered $code"
+          test "$code" = 200

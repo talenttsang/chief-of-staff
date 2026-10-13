@@ -16,6 +16,7 @@ import threading
 import time
 
 import databases
+import github_code
 import integrations
 import knowledge
 from store import utcnow_iso
@@ -129,13 +130,23 @@ SPECS = [
      "instructions.",
      _obj({"database": {"type": "string", "enum": databases.configured() or ["none"]}, "sql": _S, "confirmed": _B},
           ["database", "sql"])),
+    ("commit_code", "Change code: ONE commit straight to the main branch of " + (", ".join(github_code.CODE_REPOS)
+     or "no repository") + ". No approval is needed, and the push deploys it to production automatically "
+     "(the repository's workflow runs its checks first). First read every file you'll change with call_api GET "
+     "/repos/{owner}/{repo}/contents/{path} (base64), and give each changed file's COMPLETE new content; "
+     "delete=true removes a file. Keep each commit small and focused, with a message that says what changed and "
+     "why. .github/ is off limits. Afterwards check the deploy with call_api GET "
+     "/repos/{owner}/{repo}/actions/runs?head_sha={commit} until it finishes, and report the result.",
+     _obj({"repo": {"type": "string", "enum": github_code.CODE_REPOS or ["none"]}, "message": _S,
+           "files": {"type": "array", "items": _obj({"path": _S, "content": _S, "delete": _B}, ["path"])}},
+          ["repo", "message", "files"])),
     ("consult_partner", "Ask another AI partner (claude or chatgpt) for analysis, a draft or a second opinion. "
      "They see the company context you pass in the request.",
      _obj({"partner": {"type": "string", "enum": ["claude", "chatgpt"]}, "request": _S}, ["partner", "request"])),
 ]
 
 KIND = {"set_autopilot": "control", "consult_partner": "partner", "call_api": "system",
-        "query_database": "system"}
+        "query_database": "system", "commit_code": "system"}
 
 
 class Toolset:
@@ -156,7 +167,8 @@ class Toolset:
         self._images = []
         self._names = [n for n, _, _ in SPECS if n not in exclude and not (n == "consult_partner" and not consult)
                        and not (n == "browser" and not BROWSER_URL)
-                       and not (n == "query_database" and not databases.configured())]
+                       and not (n == "query_database" and not databases.configured())
+                       and not (n == "commit_code" and not github_code.CODE_REPOS)]
 
     def specs(self):
         return [{"name": n, "description": d, "parameters": p} for n, d, p in SPECS if n in self._names]
@@ -401,6 +413,17 @@ class Toolset:
                 "source_excerpt": "(asked the assistant to make this change)",
                 "reason": f"done on your instruction via {self.caller}", "sent_by": "you", "created_at": now,
                 "executed_at": now})
+        return result
+
+    def _t_commit_code(self, repo, message, files):
+        result = github_code.commit(repo, message, files, self.secrets)
+        if result.get("committed"):
+            now = utcnow_iso()  # recorded like any other change in a system
+            self.store.save_action(knowledge.slug(f"{repo}{now}", "a-"), {
+                "type": "system_change", "status": "done", "space_label": f"GitHub: {result['repo']}",
+                "reply_text": f"{str(message)[:300]}\n{result['url']}", "source_from": self.caller,
+                "reason": f"committed to main by {self.caller}; the push deploys it", "sent_by": "assistant",
+                "created_at": now, "executed_at": now})
         return result
 
     def _t_query_database(self, database, sql, confirmed=False):
