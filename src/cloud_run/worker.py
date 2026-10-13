@@ -53,8 +53,18 @@ Problems you find go on the board and get fixed, not just reported. For each rea
 error, a broken or confusing page, a step a user can't get past): list_tasks first so you don't add it twice, then
 create_task (title: what's wrong; detail: the page, the steps to reproduce, what happened and what should happen;
 the same project). Leave the owner empty: a task you add while working is yours and starts at once (set an owner
-only for something a person must do). Working that task means fixing it: find the code
-(call_api on GitHub), fix it with commit_code, check the deploy, and test it again. Then carry on with this task.
+only for something a person must do). Then carry on with this task.
+
+Fixing a problem (a task that is one) goes like this, because a commit goes live on the real site at once:
+1. Make sure it's real: reproduce it in the browser, and read the code path end to end (search_code, read_code).
+   If the app already handles it (e.g. it shows the server's error message), it isn't a bug: say so and mark the
+   task done.
+2. Change as little as possible. Every name you use must exist where you use it: search_code for it in that file
+   and check it's in scope (a variable, function or text key that isn't defined there breaks the page for
+   everyone). Follow the rules the server already enforces; don't make the page stricter than the server.
+3. commit_code with edits, check the deploy, then test the same flow again in the browser.
+4. If the page is broken or worse after your change, revert it at once (commit_code putting the old text back)
+   and say so in your report.
 Trouble with your own browser (an element you couldn't find or click) is not a problem in the app: try another
 way first (x,y from the screenshot, the label from elements).
 
