@@ -15,7 +15,8 @@ account call this service, and this service's own account has no permissions.
 Guards that hold whatever the caller asks (so no web page can talk the model past them):
   - only http(s) to public addresses: localhost, private and link-local ranges (the metadata server), and
     *.internal / *.local names are blocked, for the page itself and every request it makes;
-  - no typing into password or payment-card fields;
+  - no typing into password or payment-card fields (sign_in, sent only by Talent Solutions AI's server with a
+    test account's login from Secret Manager, is the one exception);
   - no downloads, no file pickers, no camera/location/notification permissions; dialogs are dismissed.
 """
 
@@ -290,7 +291,7 @@ def act(body):
     sid = body.get("session") or ""
     with _lock:
         _sweep()
-        if action == "open" or (action == "goto" and sid not in _sessions):
+        if action == "open" or (action in ("goto", "sign_in") and sid not in _sessions):
             device = body.get("device") if body.get("device") in DEVICES else "desktop"
             session, sid = Session(device), uuid.uuid4().hex[:12]
             _sessions[sid] = session
@@ -340,6 +341,29 @@ def act(body):
         if body.get("submit"):
             page.keyboard.press("Enter")
             page.wait_for_timeout(800)
+    elif action == "sign_in":
+        # A test account's login, filled in by Talent Solutions AI's server from Secret Manager (the model never
+        # sees it): open the page, fill each field (password fields too, only here), then submit.
+        url = str(body.get("url") or "")
+        fields = body.get("fields") if isinstance(body.get("fields"), list) else []
+        if not url or not fields:
+            return {"error": "sign_in needs a url and fields", "session": sid}
+        notes += _goto(page, url)
+        for field in fields:
+            element = _locate(page, str(field.get("target") or ""))
+            if element is None:
+                return {"error": "The sign-in page has changed: a login field is missing.", **_snapshot(sid, session)}
+            element.fill(str(field.get("value") or ""))
+        if body.get("submit"):
+            element = _locate(page, str(body["submit"]))
+            if element is None:
+                return {"error": "The sign-in page has changed: its button is missing.", **_snapshot(sid, session)}
+            element.click()
+        else:
+            page.keyboard.press("Enter")
+        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_timeout(1500)
+        notes.append("Signed in with the test account (if the page shows an error, the login was refused).")
     elif action == "press":
         page.keyboard.press(str(body.get("key") or "Enter"))
         page.wait_for_timeout(500)

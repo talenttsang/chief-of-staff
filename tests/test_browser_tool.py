@@ -35,6 +35,21 @@ class BrowserToolTests(unittest.TestCase):
     def toolset(self, **kw):
         return Toolset(MemoryStore(), None, caller="assistant", **kw)
 
+    def test_sign_in_uses_the_secret_login_and_never_shows_it(self):
+        login = {"url": "https://app.example/test-login?role=helper",
+                 "fields": [{"target": "#key", "value": "s3cret-key"}], "submit": "#go"}
+        secrets = MemorySecrets({"BROWSER_ACCOUNTS": __import__("json").dumps({"app-helper": login})})
+        with mock.patch.object(tools, "BROWSER_ACCOUNTS", ["app-helper"]):
+            ts = self.toolset(secrets=secrets, may_change=False)  # working alone may sign in too
+            out = ts.call("browser", {"action": "sign_in", "account": "app-helper"})
+            self.assertEqual(self.calls[-1]["fields"], login["fields"])
+            self.assertEqual((self.calls[-1]["url"], self.calls[-1]["submit"]), (login["url"], "#go"))
+            self.assertNotIn("s3cret-key", __import__("json").dumps(out, default=str))
+            self.assertIn("error", ts.call("browser", {"action": "sign_in", "account": "other"}))
+            self.assertIn("isn't set up", self.toolset(secrets=MemorySecrets()).call(
+                "browser", {"action": "sign_in", "account": "app-helper"})["error"])
+            self.assertIn("not type", ts.call("browser", {"action": "type", "target": "#key", "text": "x"})["error"])
+
     def test_open_attaches_the_screenshot_and_reuses_the_tab(self):
         ts = self.toolset()
         self.assertIn("browser", [s["name"] for s in ts.specs()])
