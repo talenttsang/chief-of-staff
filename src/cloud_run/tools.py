@@ -337,8 +337,21 @@ class Toolset:
         return {"tasks": [{k: t.get(k) for k in ("id", "title", "status", "owner", "owner_is_me", "due", "priority",
                                                   "space_label", "project_id")} for t in items[:60]]}
 
+    @staticmethod
+    def _bad_task_fields(fields):
+        """The board has three columns; any other status would hide the task, and a bad priority mis-sorts it."""
+        for key in ("status", "priority"):
+            allowed = _TASK_FIELDS[key]["enum"]
+            if key in fields and fields[key] not in allowed:
+                return {"error": f"{key} must be one of {', '.join(allowed)} (for a blocked task: keep it in_progress and "
+                                 "ask_owner, or say what blocks it in detail)"}
+        return None
+
     def _t_create_task(self, title, **fields):
         import secrets as pysecrets
+
+        if self._bad_task_fields(fields):
+            return self._bad_task_fields(fields)
 
         now = utcnow_iso()
         task = {"title": title[:200], "detail": "", "owner": "", "owner_is_me": True, "due": "", "priority": "medium",
@@ -365,6 +378,8 @@ class Toolset:
     def _t_update_task(self, task_id, **fields):
         if not self.store.get_task(task_id):
             return {"error": "no such task"}
+        if self._bad_task_fields(fields):
+            return self._bad_task_fields(fields)
         changes = {k: v for k, v in fields.items() if k in _TASK_FIELDS}
         return {"task": self.store.save_task(task_id, {**changes, "updated_at": utcnow_iso()})}
 

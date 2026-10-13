@@ -314,6 +314,17 @@ def _choice_button(page, target, choice):
     return None
 
 
+def _listed(page, target):
+    """An element by the name the elements list gave it (all its text on one line), e.g. a choice card
+    "English Best for families who communicate in English", which no single text match finds."""
+    wanted = " ".join(target.split()).lower()
+    if not wanted:
+        return None
+    listed = page.evaluate(ELEMENTS_JS, MAX_ELEMENTS)
+    return next((e for e in listed if e["label"].lower() == wanted), None) or \
+        next((e for e in listed if e["label"].lower().startswith(wanted)), None)
+
+
 def _close_menu(page, element):
     """Close a dropdown left open: Escape, or a click where its button is (on the backdrop, if it has one)."""
     page.keyboard.press("Escape")
@@ -380,13 +391,18 @@ def act(body):
         notes += _goto(page, url)
     elif action == "click":
         before = len(session.context.pages)
+        element = None
         if body.get("x") is not None and body.get("y") is not None:
             page.mouse.click(float(body["x"]), float(body["y"]))
         else:
             element = _locate(page, str(body.get("target") or ""))
-            if element is None:
+            spot = None if element is not None else _listed(page, str(body.get("target") or ""))
+            if element is None and spot is None:
                 return {"error": f"Nothing visible matches '{body.get('target')}'. Use a label from elements, or x,y.",
                         **_snapshot(sid, session)}
+            if spot is not None:  # a card or tile named by all its text, as elements lists it: click where it is
+                page.mouse.click(spot["x"], spot["y"])
+        if element is not None:
             try:
                 element.click(timeout=5000)
             except Exception as exc:  # noqa: BLE001 - usually something on top of it

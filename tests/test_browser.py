@@ -47,6 +47,8 @@ PAGES = {
       <div class="field"><label>Age</label><div class="cselect">
         <button type="button" aria-haspopup="listbox"><span>Select…</span></button></div></div>
       <div class="field"><label>Ages of children</label><input class="input" type="text" /></div>
+      <div class="cards"><div class="card" onclick="this.dataset.on='1'" style="cursor:pointer;padding:8px">
+        <b>English</b><br><small>Best for families who communicate in English</small></div></div>
     </body></html>""",
     "/product": "<html><head><title>Lace wig</title></head><body><h1>Lace wig</h1><p>$199</p></body></html>",
 }
@@ -180,6 +182,8 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(pressed, ["true", "true"])
         self.assertIn("is a dropdown", self.run_act(session=sid, action="type", target="Age", text="30")["error"])
         self.assertNotIn("error", self.run_act(session=sid, action="type", target="Ages of children", text="3"))
+        card = "English\nBest for families who communicate in English"  # as the model copies it from elements
+        self.assertNotIn("error", self.run_act(session=sid, action="click", target=card))
         self.run_act(session=sid, action="close")
 
     def test_new_tab_mobile_and_blocked_requests(self):

@@ -913,8 +913,10 @@ class ResearchAndWorkTests(unittest.TestCase):
         self.assertEqual(started, ["t2"])
         self.assertEqual(self.store.get_task("t2")["owner"], "Assistant")
         self.assertIn("error", tools.call("start_task", {"task_id": "nope"}))
+        self.assertIn("in_progress", tools.call("update_task", {"task_id": "t2", "status": "blocked"})["error"])
+        self.assertEqual(self.store.get_task("t2")["status"], "todo")  # a status the board has no column for is refused
         self.assertNotIn("start_task", Toolset(self.store, None)._names)  # no starter, no tool
-        self.assertEqual(self.store.list_steps()[0]["tool"], "start_task")
+        self.assertIn("start_task", [s["tool"] for s in self.store.list_steps()])
 
     def test_old_steps_are_pruned(self):
         self.store.add_step({"tool": "browser", "at": "2026-01-01T00:00:00+00:00"})
