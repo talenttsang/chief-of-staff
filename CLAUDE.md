@@ -30,7 +30,7 @@ handing over a command to run:
 
 ## Data & Credentials
 
-**GCP project:** `helperexpress-hk` (Cloud Run, Firestore database `man-ai`, Vertex AI).
+**GCP project:** `helperexpress-hk` (Cloud Run, Firestore database `chat-assistant`, Vertex AI).
 All credentials live in its **Secret Manager**;
 nothing sensitive goes in the repo, in a GitHub Actions *variable*, or in a
 Claude cloud environment's *environment variables* box.

@@ -102,7 +102,7 @@ If the workflow warns it couldn't grant `roles/datastore.user` or
 |---|---|
 | `OWNER_EMAIL` | `manne@superhairpieces.com` |
 | `GCP_PROJECT` | `helperexpress-hk` (Firestore, Vertex AI) |
-| `FIRESTORE_DATABASE` | `(default)` (the live app uses `man-ai`) |
+| `FIRESTORE_DATABASE` | `(default)` (the live app uses `chat-assistant`) |
 | `DATABASES` | none; `name=SECRET` pairs, e.g. `helperxpress=SUPABASE_DB_URL` (the secret holds a postgres:// URL) |
 | `SECRETS_PROJECT` | `helperexpress-hk` (where every secret is read and written) |
 | `GEMINI_MODEL` | `gemini-2.5-pro` |
