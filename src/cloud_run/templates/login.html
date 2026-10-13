@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant-HK">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,18 +21,18 @@
 <main>
   <div class="card">
     <h1>Talent Solutions AI</h1>
-    <p>Your AI chief of staff for HelperConnects and HelperXpress: it keeps every project and the code moving, learns from you, and acts for you.</p>
+    <p>HelperConnects 和 HelperXpress 的 AI 幕僚長：推動每個項目和程式碼的進度，向你學習，並代你行事。</p>
     {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
     {% if back %}
-      <a class="btn primary" href="/?tab=access">Back to Talent Solutions AI</a>
+      <a class="btn primary" href="/?tab=access">返回 Talent Solutions AI</a>
     {% elif configured %}
       <form method="post" action="/login">
-        <input type="password" name="password" aria-label="Password" placeholder="Password" autocomplete="current-password" required autofocus>
-        <button class="btn primary" type="submit">Sign in</button>
+        <input type="password" name="password" aria-label="密碼" placeholder="密碼" autocomplete="current-password" required autofocus>
+        <button class="btn primary" type="submit">登入</button>
       </form>
-      <p style="margin-top:16px;font-size:13px">You stay signed in on this browser.</p>
+      <p style="margin-top:16px;font-size:13px">你會在這個瀏覽器保持登入。</p>
     {% else %}
-      <div class="error">No password is set yet. Store one in Secret Manager as <code>{{ secret }}</code>, then reload this page.</div>
+      <div class="error">尚未設定密碼。請在 Secret Manager 儲存為 <code>{{ secret }}</code>，然後重新載入此頁。</div>
     {% endif %}
   </div>
 </main>

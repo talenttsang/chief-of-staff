@@ -430,12 +430,11 @@ REGISTRY += [  # engineering
               "/repos/{owner}/{repo}/issues {\"title\", \"body\"}, POST /repos/{owner}/{repo}/issues/{n}/comments "
               "{\"body\"}, PATCH /repos/{owner}/{repo}/issues/{n} {\"state\": \"closed\"}."),
         probe="/user", system_id="github", category="Engineering", kind="paste",
-        fields=[("GITHUB_TOKEN", "Personal access token (fine-grained)", "github_pat_…", True)],
-        help=("On GitHub, signed in as the account that owns the code: Settings > Developer settings > Personal "
-              "access tokens > Fine-grained tokens > Generate new token. Resource owner: that account. Repository "
-              "access: the HelperConnects and HelperXpress repositories. Permissions (Read): Contents, Issues, Pull "
-              "requests, Actions, Metadata; make Issues and Pull requests Read and write if Talent Solutions AI may open issues or "
-              "comment after your OK. Generate, copy the token and paste it here.")),
+        fields=[("GITHUB_TOKEN", "個人存取權杖（fine-grained）", "github_pat_…", True)],
+        help=("在 GitHub 以擁有程式碼的帳戶登入：Settings > Developer settings > Personal access tokens > "
+              "Fine-grained tokens > Generate new token。Resource owner：該帳戶。Repository access：HelperConnects 和 "
+              "HelperXpress 的儲存庫。權限（Read and write）：Contents、Pull requests、Workflows、Issues；"
+              "（Read）：Actions、Metadata。產生後複製權杖並貼在這裡。")),
 ]
 
 # Which systems this deployment offers: ids in INTEGRATIONS, separated by ";" (gcloud --set-env-vars splits on

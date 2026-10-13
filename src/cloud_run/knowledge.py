@@ -24,39 +24,39 @@ _company_cache = None
 # status: connected (the assistant can use it now), available (credentials exist in the
 # project but the assistant can't use them yet), needed, requested, not_used.
 SEED_SYSTEMS = [
-    ("google_calendar", "Google Calendar", "Communication", "connected", "Read and create calendar events."),
+    ("google_calendar", "Google 日曆", "溝通", "connected", "讀取和建立日曆活動。"),
     # The AI rows' status is kept true by talk.Talk.test_partners (Check connections and every hourly run).
-    ("gemini", "Gemini (Vertex AI)", "AI", "connected", "Talent Solutions AI's own brain and voice."),
-    ("chatgpt", "ChatGPT (OpenAI)", "AI partner", "needed",
-     "Second opinions, drafts and live voice calls from ChatGPT. Needs CHATGPT_API_KEY in Secret Manager."),
-    ("claude", "Claude (Anthropic)", "AI partner", "needed",
-     "Second opinions, drafts and code review from Claude. Needs ANTHROPIC_API_KEY in Secret Manager."),
-    ("project_tracker", "Project tracker (GitHub Projects, Jira, Linear?)", "Engineering", "needed",
-     "Where tasks, bugs and sprints live, if not GitHub issues."),
-    ("hosting", "Hosting (Google Cloud, Vercel, AWS?)", "Engineering", "needed",
-     "Deploys, logs and costs of the HelperConnects and HelperXpress apps."),
-    ("error_tracking", "Error tracking (Sentry?)", "Engineering", "needed", "Production errors to triage."),
-    ("team_chat", "Team chat (Slack, WhatsApp, Discord?)", "Communication", "needed",
-     "Where the team talks."),
+    ("gemini", "Gemini (Vertex AI)", "AI", "connected", "Talent Solutions AI 自己的大腦和聲音。"),
+    ("chatgpt", "ChatGPT (OpenAI)", "AI 夥伴", "needed",
+     "ChatGPT 提供第二意見、草稿和即時語音通話。需要 Secret Manager 中的 CHATGPT_API_KEY。"),
+    ("claude", "Claude (Anthropic)", "AI 夥伴", "needed",
+     "Claude 提供第二意見、草稿和程式碼審查。需要 Secret Manager 中的 ANTHROPIC_API_KEY。"),
+    ("project_tracker", "項目追蹤（GitHub Projects、Jira、Linear？）", "工程", "needed",
+     "如果不是 GitHub issues，任務、錯誤和衝刺放在哪裡。"),
+    ("hosting", "託管（Google Cloud、Vercel、AWS？）", "工程", "needed",
+     "HelperConnects 和 HelperXpress 應用程式的部署、日誌和費用。"),
+    ("error_tracking", "錯誤追蹤（Sentry？）", "工程", "needed", "需要處理的正式環境錯誤。"),
+    ("team_chat", "團隊通訊（Slack、WhatsApp、Discord？）", "溝通", "needed",
+     "團隊在哪裡溝通。"),
 ]
 
 SEED_QUESTIONS = [
-    ("What does HelperConnects do, for whom, and how does it make money? The same for HelperXpress, and how do "
-     "the two relate?", "I can't run a business I can't describe.", 1),
-    ("Who works on each one (developers, designers, operations, contractors), and who decides what?",
-     "So I route work to the right people.", 1),
-    ("Which GitHub repositories belong to each product, and what's the stack (frontend, backend, database, "
-     "hosting)?", "Engineering work starts with knowing the code.", 1),
-    ("List the active projects and features in flight, one line each: name, goal, owner, status, deadline.",
-     "Projects are how I organise the work.", 1),
-    ("Where do tasks and bugs live today (GitHub issues, Jira, Linear, Notion, a sheet)? How do releases happen?",
-     "Tells me which board to keep current.", 2),
-    ("What are the top 3 goals for each product for the next 90 days, with numbers if you have them?",
-     "Goals decide what I push first.", 2),
-    ("Which systems will you give me access to: GitHub, hosting, error tracking, analytics, payments, team chat?",
-     "Each connection lets me do work instead of asking about it.", 2),
-    ("What are my hard limits: what must I never touch, deploy or say without you?",
-     "Sets the guardrails for autopilot.", 1),
+    ("HelperConnects 做甚麼、服務誰、怎樣賺錢？HelperXpress 也一樣，兩者有甚麼關係？",
+     "不了解的業務，我無法管理。", 1),
+    ("每間公司有誰參與（開發、設計、營運、外判），誰負責決定甚麼？",
+     "讓我把工作交給合適的人。", 1),
+    ("哪些 GitHub 儲存庫屬於哪個產品？技術架構是甚麼（前端、後端、資料庫、託管）？",
+     "工程工作要先了解程式碼。", 1),
+    ("列出進行中的項目和功能，每行一個：名稱、目標、負責人、狀態、截止日期。",
+     "我用項目來組織工作。", 1),
+    ("任務和錯誤現在放在哪裡（GitHub issues、Jira、Linear、Notion、試算表）？怎樣發佈新版本？",
+     "讓我知道要維護哪個工作板。", 2),
+    ("每個產品未來 90 日最重要的 3 個目標是甚麼？如有數字請提供。",
+     "目標決定我先推進甚麼。", 2),
+    ("你會給我哪些系統的權限：GitHub、託管、錯誤追蹤、分析、付款、團隊通訊？",
+     "每個連接都讓我可以直接做事，而不只是發問。", 2),
+    ("我的底線是甚麼：哪些事沒有你同意絕對不能碰、部署或說？",
+     "為自動執行設定界限。", 1),
 ]
 
 

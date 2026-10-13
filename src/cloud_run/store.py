@@ -32,11 +32,11 @@ FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
 # "Tiered" autonomy: internal work runs on its own; anything that reaches
 # customers, money, staff or deletes data waits for the owner until loosened.
 AUTONOMY_CATEGORIES = {
-    "calendar": "Calendar events and invites",
-    "customer_messages": "Messages to customers or anyone outside the company",
-    "money": "Refunds, prices, discounts, ad budgets, payments",
-    "staff_hr": "Staff, schedules, hiring, HR",
-    "delete_data": "Deleting or overwriting data",
+    "calendar": "日曆活動和邀請",
+    "customer_messages": "給客戶或公司以外任何人的訊息",
+    "money": "退款、價格、折扣、廣告預算、付款",
+    "staff_hr": "員工、更表、招聘、人事",
+    "delete_data": "刪除或覆蓋資料",
 }
 DEFAULT_AUTONOMY = {
     "calendar": "auto",

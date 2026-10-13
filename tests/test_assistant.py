@@ -60,7 +60,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/state").status_code, 401)
         page = self.client.get("/")
         self.assertEqual(page.status_code, 200)
-        self.assertIn(b"No password is set yet", page.data)
+        self.assertIn("尚未設定密碼".encode(), page.data)
 
     def test_board_page_for_owner(self):
         self.sign_in()

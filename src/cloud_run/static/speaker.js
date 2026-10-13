@@ -8,7 +8,7 @@
   function setButton(button, playing) {
     if (!button) return;
     button.textContent = playing ? "■" : "🔊";
-    button.title = playing ? "Stop reading" : "Read aloud";
+    button.title = playing ? "停止朗讀" : "朗讀";
     button.setAttribute("aria-label", button.title);
     button.classList.toggle("on", playing);
   }
@@ -39,7 +39,7 @@
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        throw new Error(data.error || `Couldn't read it out (${resp.status})`);
+        throw new Error(data.error || `無法朗讀（${resp.status}）`);
       }
       if (me.cancelled) return;
       const rate = Number(resp.headers.get("X-Sample-Rate") || 24000);

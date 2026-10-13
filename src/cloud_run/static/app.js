@@ -2,24 +2,25 @@
 "use strict";
 
 const STATUS_ORDER = ["todo", "in_progress", "done"];
-const TYPE_LABEL = { system_change: "Change" };
-const STATUS_LABEL = { done: "Done", suggested: "Waiting", failed: "Failed", dismissed: "Dismissed" };
+const TYPE_LABEL = { system_change: "更改" };
+const STATUS_LABEL = { done: "已完成", suggested: "等待中", failed: "失敗", dismissed: "已略過" };
 const SYSTEM_GROUPS = [
-  ["requested", "Requested by the assistant"], ["needed", "Needed"], ["available", "Credentials exist, not connected yet"],
-  ["no_access", "Key in Secret Manager, but the app can't read it"], ["error", "Key found, but the system refused it"],
-  ["connected", "Connected"], ["not_used", "Not used"],
+  ["requested", "助理要求的"], ["needed", "需要的"], ["available", "已有憑證，尚未連接"],
+  ["no_access", "Secret Manager 有金鑰，但應用程式無法讀取"], ["error", "找到金鑰，但系統拒絕了"],
+  ["connected", "已連接"], ["not_used", "不使用"],
 ];
 // Google permissions in plain words, for the Reconnect banner.
 const SCOPE_LABEL = {
-  "calendar.events": "your calendar",
-  "gmail.readonly": "reading Gmail", "gmail.compose": "drafting emails", "drive.readonly": "reading Drive",
-  "spreadsheets.readonly": "reading Sheets", "analytics.readonly": "Analytics", "webmasters.readonly": "Search Console",
+  "calendar.events": "你的日曆",
+  "gmail.readonly": "讀取 Gmail", "gmail.compose": "草擬電郵", "drive.readonly": "讀取 Drive",
+  "spreadsheets.readonly": "讀取 Sheets", "analytics.readonly": "Analytics", "webmasters.readonly": "Search Console",
   "content": "Merchant Center",
 };
-const COMPANY_LABEL = { helperconnects: "HelperConnects", helperxpress: "HelperXpress", both: "Both" };
+const PROJECT_STATUS = { active: "進行中", blocked: "受阻", paused: "暫停", done: "已完成", unknown: "未知" };
+const COMPANY_LABEL = { helperconnects: "HelperConnects", helperxpress: "HelperXpress", both: "兩者" };
 const SUGGESTIONS = [
-  "Interview me: what do you most need to know?", "What do you know so far about the companies?",
-  "Which systems do you need access to first, and how do I connect them?", "What's on my calendar this week?",
+  "訪問我：你最需要知道甚麼？", "到目前為止你對兩間公司知道甚麼？",
+  "你最先需要哪些系統的權限？我要怎樣連接？", "我這星期的日曆有甚麼？",
 ];
 
 let state = null;      // /api/state: tasks, actions, runs, settings, status
@@ -49,7 +50,7 @@ function el(tag, attrs = {}, ...children) {
 }
 
 const safeUrl = (u) => (typeof u === "string" && u.startsWith("https://") ? u : null);
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const plural = (n, word) => `${n} ${word}`;  // Chinese has no plural: "3 個任務"
 const where = (t) => (t.source_from && t.source_from !== t.space_label ? `${t.space_label} · ${t.source_from}` : t.space_label);
 
 async function api(method, path, body) {
@@ -58,9 +59,9 @@ async function api(method, path, body) {
     headers: { "Content-Type": "application/json", "X-Chat-Assistant": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (resp.status === 401) { location.reload(); throw new Error("Signed out"); }
+  if (resp.status === 401) { location.reload(); throw new Error("已登出"); }
   const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(data.error || `Request failed (${resp.status})`);
+  if (!resp.ok) throw new Error(data.error || `請求失敗（${resp.status}）`);
   return data;
 }
 
@@ -72,10 +73,10 @@ function toast(msg) {
 function ago(iso) {
   if (!iso) return "";
   const s = (Date.now() - new Date(iso.split("#")[0]).getTime()) / 1000;
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return new Date(iso.split("#")[0]).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (s < 60) return "剛剛";
+  if (s < 3600) return `${Math.round(s / 60)} 分鐘前`;
+  if (s < 86400) return `${Math.round(s / 3600)} 小時前`;
+  return new Date(iso.split("#")[0]).toLocaleDateString("zh-HK", { month: "short", day: "numeric" });
 }
 
 function todayStr() {
@@ -104,8 +105,8 @@ function checkVersion() {
   }
   if ($("updateBanner")) return;
   $("banners").append(el("div", { class: "banner", id: "updateBanner" },
-    el("span", {}, el("b", {}, "A new version is ready. "), "Reload when you're done to get it."),
-    el("button", { class: "btn primary", onclick: () => location.reload() }, "Reload")));
+    el("span", {}, el("b", {}, "新版本已準備好。"), "完成手上的工作後重新載入即可使用。"),
+    el("button", { class: "btn primary", onclick: () => location.reload() }, "重新載入")));
 }
 
 function render() {
@@ -123,31 +124,31 @@ function renderHeader() {
   const run = state.status.last_run;
   $("dot").classList.toggle("on", state.connected && !state.status.connection_error);
   $("autoAct").checked = !!state.settings.auto_act;
-  if (!run) { $("lastrun").textContent = "No runs yet. It works its own tasks every hour, or press Run now."; return; }
+  if (!run) { $("lastrun").textContent = "尚未執行。它每小時處理自己的任務，或按「立即執行」。"; return; }
   if (run.error) {
-    $("lastrun").textContent = `Last run ${ago(run.started_at)} failed: ${run.error}${run.trace ? " (details in Activity → Runs)" : ""}`;
+    $("lastrun").textContent = `上次執行（${ago(run.started_at)}）失敗：${run.error}${run.trace ? "（詳情見 活動紀錄 → 執行紀錄）" : ""}`;
     return;
   }
-  $("lastrun").textContent = `Last run ${ago(run.finished_at || run.started_at)} · `
-    + `${plural((run.tasks_worked || []).length, "task")} worked · ${plural(run.systems_connected || 0, "system")} connected`;
+  $("lastrun").textContent = `上次執行 ${ago(run.finished_at || run.started_at)} · `
+    + `處理了 ${plural((run.tasks_worked || []).length, "個任務")} · 已連接 ${plural(run.systems_connected || 0, "個系統")}`;
 }
 
 function renderBanners() {
   const box = $("banners"); box.replaceChildren();
   if (!state.connected) {
     box.append(el("div", { class: "banner" },
-      el("span", {}, el("b", {}, "Connect Google. "), `Talent Solutions AI reads Gmail, Calendar and Drive as ${state.google_account || "your Google account"}. Press Connect and sign in to Google as that account.`),
-      el("a", { class: "btn primary", href: "/connect/google" }, "Connect")));
+      el("span", {}, el("b", {}, "連接 Google。"), `Talent Solutions AI 以 ${state.google_account || "你的 Google 帳戶"} 讀取 Gmail、日曆和 Drive。請按「連接」，並以該帳戶登入 Google。`),
+      el("a", { class: "btn primary", href: "/connect/google" }, "連接")));
   } else if (state.status.connection_error) {
     box.append(el("div", { class: "banner bad" },
-      el("span", {}, el("b", {}, "The assistant can't reach Google. "), state.status.connection_error),
+      el("span", {}, el("b", {}, "助理無法連接 Google。"), state.status.connection_error),
       el("a", { class: "btn primary", href: "/connect/google" }, "Reconnect")));
   }
   if ((state.status.missing_scopes || []).length) {
     const what = state.status.missing_scopes.map((s) => SCOPE_LABEL[s] || s);
     box.append(el("div", { class: "banner" },
-      el("span", {}, el("b", {}, "Talent Solutions AI needs your OK in Google for: "), what.join(", "),
-        ". Press Reconnect and allow everything Google asks."),
+      el("span", {}, el("b", {}, "Talent Solutions AI 需要你在 Google 批准："), what.join("、"),
+        "。請按「重新連接」，並允許 Google 要求的所有權限。"),
       el("a", { class: "btn primary", href: "/connect/google" }, "Reconnect")));
   }
 }
@@ -163,20 +164,20 @@ function renderPartners() {
   renderReadAloud();
   const info = partnerInfo(partner);
   $("startVoice").disabled = !$("voicebar").hidden || !info.available;  // one call at a time
-  $("startVoice").title = info.available ? `Talk live with ${info.label}` : info.detail || `${info.label} isn't available`;
-  $("message").placeholder = `Message ${info.label}…`;
+  $("startVoice").title = info.available ? `與 ${info.label} 即時通話` : info.detail || `${info.label} 暫時無法使用`;
+  $("message").placeholder = `傳訊息給 ${info.label}…`;
 }
 
 function renderReadAloud() {
   const on = !!(speaker() && speaker().auto);
   $("readAloud").setAttribute("aria-pressed", String(on));
-  $("readAloud").title = on ? "Reading new replies aloud. Click to stop" : "Read new replies aloud";
+  $("readAloud").title = on ? "正在朗讀新回覆，按一下停止" : "朗讀新回覆";
 }
 $("readAloud").onclick = () => {
   if (!speaker()) return;
   speaker().auto = !speaker().auto;
   renderReadAloud();
-  toast(speaker().auto ? "New replies will be read aloud" : "Replies won't be read aloud");
+  toast(speaker().auto ? "會朗讀新回覆" : "不會朗讀回覆");
 };
 
 async function selectPartner(name) {
@@ -198,11 +199,11 @@ function turnNode(t, live = false) {
   const tools = (t.tools || []).map((x) => x.tool);
   const who = partner;  // the thread on screen belongs to the selected partner
   const readAloud = t.role === "assistant" && !live && t.text
-    ? el("button", { class: "spk", title: "Read aloud", "aria-label": "Read aloud",
+    ? el("button", { class: "spk", title: "朗讀", "aria-label": "朗讀",
         onclick: (e) => speaker() && speaker().toggle(t.text, who, e.currentTarget) }, "🔊")
     : null;
   return el("div", { class: `msg ${t.role}${live ? " live" : ""}` }, t.text,
-    tools.length ? el("div", { class: "tools" }, `Used: ${[...new Set(tools)].join(", ")}`) : null,
+    tools.length ? el("div", { class: "tools" }, `使用了：${[...new Set(tools)].join("、")}`) : null,
     t.at ? el("div", { class: "when" }, `${t.voice ? "🎙 " : ""}${ago(t.at)}`, readAloud) : readAloud);
 }
 
@@ -225,7 +226,7 @@ async function sendMessage() {
   $("message").value = "";
   const pending = { role: "user", text, at: new Date().toISOString() };
   talkTurns.push(pending);
-  renderThread([el("div", { class: "msg assistant live" }, el("span", { class: "spinner" }), " thinking…")]);
+  renderThread([el("div", { class: "msg assistant live" }, el("span", { class: "spinner" }), " 思考中…")]);
   try {
     const asked = partner;
     const { reply } = await api("POST", `/api/talk/${asked}`, { message: text });
@@ -247,7 +248,7 @@ async function sendMessage() {
 }
 
 async function clearTalk() {
-  if (!confirm(`Clear your conversation with ${partnerInfo(partner).label}? What it learned stays in the knowledge base.`)) return;
+  if (!confirm(`清除與 ${partnerInfo(partner).label} 的對話？它學到的東西會保留在知識庫。`)) return;
   await api("DELETE", `/api/talk/${partner}`).catch((e) => toast(e.message));
   talkTurns = []; renderThread();
 }
@@ -275,10 +276,10 @@ function setChat(open, focus = true) {
 
 function renderLauncher() {
   const onCall = !$("voicebar").hidden;
-  const label = onCall ? "On a call · Talent Solutions AI" : "Talent Solutions AI";
+  const label = onCall ? "通話中 · Talent Solutions AI" : "Talent Solutions AI";
   $("chatLauncher").replaceChildren(...[onCall ? el("span", { class: "pulse", "aria-hidden": "true" }) : el("span", { "aria-hidden": "true" }, "💬"),
-    label, unread && !onCall ? el("span", { class: "badge", title: "New reply" }) : null].filter(Boolean));
-  $("chatLauncher").setAttribute("aria-label", `${label}${unread ? " (new reply)" : ""}. Open the chat`);
+    label, unread && !onCall ? el("span", { class: "badge", title: "新回覆" }) : null].filter(Boolean));
+  $("chatLauncher").setAttribute("aria-label", `${label}${unread ? "（有新回覆）" : ""}。開啟對話`);
 }
 
 // Opens the chat with Talent Solutions AI and a message ready to send (from Questions and Access).
@@ -319,15 +320,15 @@ $("message").addEventListener("keydown", (e) => {
 // here and saved straight into Secret Manager, a Google tool is part of the Google sign-in.
 function connectButton(s) {
   const c = s.connect;
-  if (c.kind === "paste") return el("button", { class: "btn primary", onclick: () => openConnect(s) }, "Connect");
+  if (c.kind === "paste") return el("button", { class: "btn primary", onclick: () => openConnect(s) }, "連接");
   const href = c.kind === "google" ? "/connect/google?back=access" : `/connect/setup?then=${encodeURIComponent(s.id)}`;
-  return el("a", { class: "btn primary", href }, "Connect");
+  return el("a", { class: "btn primary", href }, "連接");
 }
 
 let connecting = null;
 function openConnect(s) {
   connecting = s;
-  $("connectTitle").textContent = `Connect ${s.name}`;
+  $("connectTitle").textContent = `連接 ${s.name}`;
   $("connectHelp").textContent = s.connect.help || "";
   $("connectFields").replaceChildren(...s.connect.fields.map((f) => el("label", {}, f.label,
     el("input", { name: f.secret, type: f.hidden ? "password" : "text", placeholder: f.placeholder || "",
@@ -339,7 +340,7 @@ $("connectForm").onsubmit = async (e) => {
   e.preventDefault();
   const s = connecting;
   const values = Object.fromEntries([...$("connectFields").querySelectorAll("input")].map((i) => [i.name, i.value.trim()]));
-  $("saveConnect").disabled = true; $("saveConnect").textContent = "Connecting…";
+  $("saveConnect").disabled = true; $("saveConnect").textContent = "連接中…";
   try {
     const resp = await fetch(`/api/connect/${encodeURIComponent(s.connect.integration)}`, {
       method: "POST", credentials: "same-origin",
@@ -347,42 +348,42 @@ $("connectForm").onsubmit = async (e) => {
     });
     const data = await resp.json().catch(() => ({}));
     if (resp.status === 409 && data.needs_setup) {  // the one owner approval hasn't happened yet
-      toast("One Google approval first; then paste it again.");
+      toast("請先在 Google 批准一次，然後再貼上。");
       location.href = data.url;
       return;
     }
-    if (!resp.ok) throw new Error(data.error || `Couldn't connect (${resp.status})`);
+    if (!resp.ok) throw new Error(data.error || `無法連接（${resp.status}）`);
     $("connectDialog").close();
-    toast(data.result && data.result.ok ? `${s.name} is connected` : `Saved, but ${s.name} said: ${(data.result || {}).detail || "no answer"}`);
+    toast(data.result && data.result.ok ? `${s.name} 已連接` : `已儲存，但 ${s.name} 回覆：${(data.result || {}).detail || "沒有回應"}`);
     refreshKnowledge();
   } catch (err) { toast(err.message); }
-  finally { $("saveConnect").disabled = false; $("saveConnect").textContent = "Connect"; }
+  finally { $("saveConnect").disabled = false; $("saveConnect").textContent = "連接"; }
 };
 
 // Try each system with its key (the server does it; keys never reach the page). Right after the owner approval,
 // Google can take a minute to apply new access, so "can't read" results are retried a few times.
 async function checkConnections(retries = 0) {
   const button = $("checkSystems");
-  button.disabled = true; button.textContent = "Checking…";
+  button.disabled = true; button.textContent = "檢查中…";
   try {
     const { results } = await api("POST", "/api/integrations/check");
     const all = Object.values(results), ok = all.filter((r) => r.ok).length;
     const waiting = all.filter((r) => !r.ok && /can't read/.test(r.detail || "")).length;
     refreshKnowledge();
     // Every system that isn't connected, with what it said, so the reason is on screen (and in a screenshot).
-    const why = (r) => /can't read the (HUBSPOT|REAMAZE)/.test(r.detail || "") ? "waiting for its key: press Connect and paste it"
-      : /Google isn't connected|insufficient|scope/i.test(r.detail || "") ? "press Connect to add it to your Google sign-in"
-      : (r.detail || "no answer").slice(0, 160);
+    const why = (r) => /can't read the (HUBSPOT|REAMAZE)/.test(r.detail || "") ? "等待金鑰：按「連接」並貼上"
+      : /Google isn't connected|insufficient|scope/i.test(r.detail || "") ? "按「連接」把它加入你的 Google 登入"
+      : (r.detail || "沒有回應").slice(0, 160);
     const failing = all.filter((r) => !r.ok).map((r) => `• ${r.system}: ${why(r)}`);
     if (waiting && retries > 0) {
-      showSetupBanner(`${ok} of ${all.length} systems connected. Google is still applying access for ${waiting}; checking again shortly…`);
+      showSetupBanner(`${all.length} 個系統中 ${ok} 個已連接。Google 仍在為 ${waiting} 個系統套用權限，稍後再檢查…`);
       setTimeout(() => checkConnections(retries - 1), 30000);  // Google can take minutes to apply new access
     } else {
-      showSetupBanner(failing.length ? `${ok} of ${all.length} systems connected. Not yet:\n${failing.join("\n")}` : `All ${all.length} systems connected.`);
-      toast(`${ok} of ${all.length} systems connected`);
+      showSetupBanner(failing.length ? `${all.length} 個系統中 ${ok} 個已連接。尚未連接：\n${failing.join("\n")}` : `全部 ${all.length} 個系統已連接。`);
+      toast(`${all.length} 個系統中 ${ok} 個已連接`);
     }
   } catch (e) { toast(e.message); }
-  finally { button.disabled = false; button.textContent = "Check connections"; }
+  finally { button.disabled = false; button.textContent = "檢查連接"; }
 }
 function showSetupBanner(text) { $("setupBanner").hidden = !text; $("setupBanner").textContent = text; }
 $("checkSystems").onclick = () => checkConnections();
@@ -395,7 +396,7 @@ function afterConnectRedirect() {
   if (params.get("setup") === "done") {
     const report = kb.setup || {};
     const errors = (report.errors || []).length;
-    showSetupBanner(errors ? `Access set up with ${errors} problem(s): ${report.errors.join("; ")}` : "Access set up. Testing every system…");
+    showSetupBanner(errors ? `權限已設定，但有 ${errors} 個問題：${report.errors.join("；")}` : "權限已設定，正在測試每個系統…");
     checkConnections(12);  // up to six minutes
   }
   const open = params.get("open");
@@ -418,22 +419,22 @@ function visibleTasks() {
 
 function taskCard(t) {
   const meta = el("div", { class: "meta" }, el("span", { class: `pri ${t.priority || "medium"}`, title: `${t.priority || "medium"} priority` }));
-  meta.append(el("span", { class: `chip ${t.owner_is_me ? "me" : ""}` }, t.owner_is_me ? "You" : (t.owner || "Unassigned")));
+  meta.append(el("span", { class: `chip ${t.owner_is_me ? "me" : ""}` }, t.owner_is_me ? "你" : (t.owner || "未指派")));
   if (t.due) {
     const today = todayStr();
     const open = t.status !== "done";
     const cls = open && t.due < today ? "overdue" : open && t.due === today ? "today" : "";
-    meta.append(el("span", { class: `chip ${cls}` }, t.due === today ? "Due today" : `Due ${t.due}`));
+    meta.append(el("span", { class: `chip ${cls}` }, t.due === today ? "今天到期" : `${t.due} 到期`));
   }
   if (t.origin === "assistant") meta.append(el("span", { class: "chip", title: "Added by the assistant" }, "AI"));
-  if (working(t)) meta.append(el("span", { class: "chip working" }, el("span", { class: "spinner" }), " working…"));
+  if (working(t)) meta.append(el("span", { class: "chip working" }, el("span", { class: "spinner" }), " 處理中…"));
   else if (t.result) meta.append(el("span", { class: "chip", title: "The assistant has reported on this task" }, "🤖 report"));
   const next = STATUS_ORDER[STATUS_ORDER.indexOf(t.status) + 1];
   const card = el("div", { class: "card", tabindex: "0", role: "button",
       onclick: () => openTask(t), onkeydown: (e) => { if (e.key === "Enter") openTask(t); } },
     el("div", { class: "title" }, t.title), meta,
     t.space_label ? el("div", { class: "src", title: t.source_excerpt || "" }, where(t)) : null);
-  if (next) card.append(el("button", { class: "advance", title: next === "done" ? "Mark done" : "Start", "aria-label": next === "done" ? "Mark done" : "Start",
+  if (next) card.append(el("button", { class: "advance", title: next === "done" ? "標示為完成" : "開始", "aria-label": next === "done" ? "標示為完成" : "開始",
     onclick: (e) => { e.stopPropagation(); updateTask(t.id, { status: next }).catch((err) => toast(err.message)); } }, next === "done" ? "✓" : "→"));
   return card;
 }
@@ -451,7 +452,7 @@ function renderBoard() {
     const box = col.querySelector(".cards");
     box.replaceChildren(...items.map(taskCard));
     if (!items.length) box.append(el("div", { class: "empty" },
-      status === "done" && !showDone ? "Tick “Show done” to see finished tasks" : "Nothing here"));
+      status === "done" && !showDone ? "勾選「顯示已完成」查看已完成的任務" : "沒有任務"));
   }
 }
 
@@ -462,23 +463,23 @@ function showTaskReport(t) {
   const box = $("taskResult");
   box.hidden = !(t && (t.result || t.work_error || working(t)));
   if (box.hidden) return;
-  if (working(t)) { box.replaceChildren(el("b", {}, "The assistant is working on this…")); return; }
-  box.replaceChildren(el("b", {}, `The assistant's report (${ago(t.worked_at)})`),
-    t.work_error ? `It stopped with an error: ${t.work_error}` : t.result,
-    t.work_tools && t.work_tools.length ? el("div", { class: "tools" }, `Used: ${t.work_tools.join(", ")}`) : null);
+  if (working(t)) { box.replaceChildren(el("b", {}, "助理正在處理…")); return; }
+  box.replaceChildren(el("b", {}, `助理的報告（${ago(t.worked_at)}）`),
+    t.work_error ? `出錯停止了：${t.work_error}` : t.result,
+    t.work_tools && t.work_tools.length ? el("div", { class: "tools" }, `使用了：${t.work_tools.join("、")}`) : null);
 }
 
 $("workTask").onclick = async () => {
-  if (!editing) { toast("Save the task first, then give it to Talent Solutions AI."); return; }
+  if (!editing) { toast("請先儲存任務，再交給 Talent Solutions AI。"); return; }
   const t = editing;
   $("taskDialog").close();
   state.tasks = state.tasks.map((x) => (x.id === t.id ? { ...x, owner: "Assistant", owner_is_me: false, working_since: new Date().toISOString() } : x));
   renderBoard();
-  toast(`Talent Solutions AI is working on “${t.title}”. Its report will appear on the task and in the chat.`);
+  toast(`Talent Solutions AI 正在處理「${t.title}」。報告會顯示在任務和對話中。`);
   try {
     const { task, done } = await api("POST", `/api/tasks/${encodeURIComponent(t.id)}/work`);
     state.tasks = state.tasks.map((x) => (x.id === t.id ? task : x));
-    toast(done ? `Done: “${t.title}”` : `Report ready on “${t.title}”`);
+    toast(done ? `已完成：「${t.title}」` : `「${t.title}」的報告已準備好`);
     if (partner === "assistant") { await loadTalk(); if (!chatOpen) { unread = true; renderLauncher(); } }
   } catch (e) {
     toast(e.message);
@@ -490,7 +491,7 @@ $("workTask").onclick = async () => {
 function openTask(t) {
   editing = t || null;
   const f = $("taskForm");
-  $("taskDialogTitle").textContent = t ? "Edit task" : "New task";
+  $("taskDialogTitle").textContent = t ? "編輯任務" : "新任務";
   f.title.value = t ? t.title : "";
   f.detail.value = t ? t.detail || "" : "";
   f.owner.value = t ? t.owner || "" : "";
@@ -503,7 +504,7 @@ function openTask(t) {
   showTaskReport(t);
   const src = $("taskSource"); src.replaceChildren();
   if (t && t.space_label) {
-    src.append(`From ${where(t)}${t.source_excerpt ? `: “${t.source_excerpt}” ` : " "}`);
+    src.append(`來自 ${where(t)}${t.source_excerpt ? `：「${t.source_excerpt}」 ` : " "}`);
   }
   $("taskDialog").showModal();
 }
@@ -527,7 +528,7 @@ $("taskForm").addEventListener("submit", async (e) => {
 });
 $("cancelTask").onclick = () => $("taskDialog").close();
 $("deleteTask").onclick = async () => {
-  if (!editing || !confirm("Delete this task?")) return;
+  if (!editing || !confirm("刪除此任務？")) return;
   try {
     await api("DELETE", `/api/tasks/${encodeURIComponent(editing.id)}`);
     state.tasks = state.tasks.filter((t) => t.id !== editing.id);
@@ -547,32 +548,32 @@ function renderProjects() {
   const box = $("projects");
   if (!items.length) {
     box.replaceChildren(el("div", { class: "empty" }, kb.projects.length ? "No projects match the filters"
-      : "No projects yet. They appear as the assistant hears your answers, or add one."));
+      : "尚未有項目。助理聽到你的回答後會加入，你亦可以自行新增。"));
     return;
   }
   box.replaceChildren(...items.map((p) => el("div", { class: "card", tabindex: "0", role: "button",
       onclick: () => openProject(p), onkeydown: (e) => { if (e.key === "Enter") openProject(p); } },
     el("div", { class: "title" }, p.name),
     el("div", { class: "meta" },
-      el("span", { class: `chip ${p.status || ""}` }, p.status || "unknown"),
+      el("span", { class: `chip ${p.status || ""}` }, PROJECT_STATUS[p.status] || p.status || "未知"),
       p.company ? el("span", { class: "chip" }, COMPANY_LABEL[p.company] || p.company) : null,
       p.owner ? el("span", { class: "chip" }, p.owner) : null,
-      p.deadline ? el("span", { class: "chip" }, `Due ${p.deadline}`) : null,
+      p.deadline ? el("span", { class: "chip" }, `${p.deadline} 到期`) : null,
       openTasks(p.id) ? el("span", { class: "chip" }, plural(openTasks(p.id), "open task")) : null,
       null),
     (p.goal || p.summary) ? el("div", { class: "body" }, p.goal || p.summary) : null,
-    p.next_steps ? el("div", { class: "body" }, `Next: ${p.next_steps}`) : null)));
+    p.next_steps ? el("div", { class: "body" }, `下一步：${p.next_steps}`) : null)));
 }
 
 function openProject(p) {
   editingProject = p || null;
   const f = $("projectForm");
-  $("projectDialogTitle").textContent = p ? "Edit project" : "New project";
+  $("projectDialogTitle").textContent = p ? "編輯項目" : "新項目";
   for (const k of ["name", "owner", "deadline", "goal", "summary", "next_steps"]) f[k].value = p ? p[k] || "" : "";
   f.company.value = p ? p.company || "" : "";
   f.status.value = p ? p.status || "active" : "active";
   $("deleteProject").hidden = !p;
-  $("projectSource").textContent = p && p.source ? `Added from ${p.source} · updated ${ago(p.updated_at)}` : "";
+  $("projectSource").textContent = p && p.source ? `來源：${p.source} · 更新於 ${ago(p.updated_at)}` : "";
   $("projectDialog").showModal();
 }
 
@@ -589,7 +590,7 @@ $("projectForm").addEventListener("submit", async (e) => {
 });
 $("cancelProject").onclick = () => $("projectDialog").close();
 $("deleteProject").onclick = async () => {
-  if (!editingProject || !confirm("Delete this project? Its tasks stay on the board.")) return;
+  if (!editingProject || !confirm("刪除此項目？它的任務會留在工作板上。")) return;
   try { await api("DELETE", `/api/projects/${encodeURIComponent(editingProject.id)}`); $("projectDialog").close(); await refreshKnowledge(); }
   catch (err) { toast(err.message); }
 };
@@ -606,36 +607,36 @@ function renderQuestions() {
   $("answeredQuestions").replaceChildren(...(answered.length ? answered.map((q) => el("div", { class: "item" },
     el("div", { class: "q" }, q.question),
     el("div", { class: "reply" }, q.answer || ""),
-    q.digest ? el("div", { class: "why" }, `Assistant: ${q.digest}`) : null,
-    el("div", { class: "why" }, `Answered ${ago(q.answered_at)}`))) : [el("div", { class: "empty" }, "Nothing answered yet")]));
+    q.digest ? el("div", { class: "why" }, `助理：${q.digest}`) : null,
+    el("div", { class: "why" }, `回答於 ${ago(q.answered_at)}`))) : [el("div", { class: "empty" }, "尚未有已回答的問題")]));
 }
 
 function questionItem(q) {
-  const box = el("textarea", { placeholder: "Your answer (short is fine)", "aria-label": "Answer" });
-  const answerBtn = el("button", { class: "btn primary" }, "Answer");
+  const box = el("textarea", { placeholder: "你的答案（簡短亦可）", "aria-label": "答案" });
+  const answerBtn = el("button", { class: "btn primary" }, "回答");
   answerBtn.onclick = async () => {
     const answer = box.value.trim();
     if (!answer) return;
-    answerBtn.disabled = true; answerBtn.replaceChildren(el("span", { class: "spinner" }), " Saving and learning…");
+    answerBtn.disabled = true; answerBtn.replaceChildren(el("span", { class: "spinner" }), " 儲存並學習中…");
     try {
       const { note } = await api("POST", `/api/questions/${encodeURIComponent(q.id)}/answer`, { answer });
-      toast(note || "Saved");
+      toast(note || "已儲存");
       await Promise.all([refreshKnowledge(), load()]);
-    } catch (e) { toast(e.message); answerBtn.disabled = false; answerBtn.textContent = "Answer"; }
+    } catch (e) { toast(e.message); answerBtn.disabled = false; answerBtn.textContent = "回答"; }
   };
   return el("div", { class: "item" },
     el("div", { class: "top" }, el("span", { class: `pri ${q.priority === 1 ? "high" : q.priority === 3 ? "low" : "medium"}` }),
-      el("span", {}, q.priority === 1 ? "Important" : q.priority === 3 ? "When you have time" : "Normal"),
+      el("span", {}, q.priority === 1 ? "重要" : q.priority === 3 ? "有空時" : "一般"),
       q.source ? el("span", {}, `· ${q.source}`) : null),
     el("div", { class: "q" }, q.question),
-    q.why ? el("div", { class: "why" }, `Why: ${q.why}`) : null,
+    q.why ? el("div", { class: "why" }, `原因：${q.why}`) : null,
     box,
     el("div", { class: "actions" }, answerBtn,
-      el("button", { class: "btn", onclick: () => askInChat(`Let's talk about this question [${q.id}]: ${q.question}`) }, "Discuss in chat"),
+      el("button", { class: "btn", onclick: () => askInChat(`我們來談談這個問題 [${q.id}]：${q.question}`) }, "在對話中討論"),
       el("button", { class: "btn", onclick: async () => {
         await api("POST", `/api/questions/${encodeURIComponent(q.id)}/dismiss`).catch((e) => toast(e.message));
         refreshKnowledge();
-      } }, "Skip")));
+      } }, "略過")));
 }
 
 // -- Access -----------------------------------------------------------------------------
@@ -647,7 +648,7 @@ function renderSystems() {
     const items = kb.systems.filter((s) => (s.status || "needed") === status);
     if (!items.length) return null;
     return el("div", {}, el("h3", {}, `${title} (${items.length})`), ...items.map((s) => {
-      const select = el("select", { "aria-label": `Status of ${s.name}` },
+      const select = el("select", { "aria-label": `${s.name} 的狀態` },
         ...SYSTEM_GROUPS.map(([v, label]) => el("option", { value: v }, label.split(" (")[0])));
       select.value = s.status || "needed";
       select.onchange = async () => {
@@ -658,11 +659,11 @@ function renderSystems() {
         el("div", { class: "top" }, el("b", {}, s.name), s.category ? el("span", { class: "chip" }, s.category) : null,
           el("span", { class: "spacer", style: "flex:1" }), select),
         s.unlocks ? el("div", { class: "reply" }, s.unlocks) : null,
-        s.why ? el("div", { class: "why" }, status === "no_access" || status === "error" ? s.why : `Why the assistant asked: ${s.why}`) : null,
+        s.why ? el("div", { class: "why" }, status === "no_access" || status === "error" ? s.why : `助理要求的原因：${s.why}`) : null,
         status !== "connected" && status !== "not_used" ? el("div", { class: "actions" },
           s.connect ? connectButton(s) : el("button", { class: "btn",
-            onclick: () => askInChat(`How do I give you access to ${s.name}? Walk me through it step by step.`) },
-          "How do I connect this?")) : null);
+            onclick: () => askInChat(`我要怎樣給你 ${s.name} 的權限？請一步步教我。`) },
+          "如何連接？")) : null);
     }));
   }).filter(Boolean));
 }
@@ -677,24 +678,24 @@ function actionItem(a) {
     el("span", {}, `· ${ago(a.executed_at || a.created_at)}`));
   const body = [top];
   if (a.reply_text) body.push(el("div", { class: "reply" }, a.reply_text));
-  const why = [a.reason, a.error ? `Error: ${a.error}` : ""].filter(Boolean).join(" · ");
+  const why = [a.reason, a.error ? `錯誤：${a.error}` : ""].filter(Boolean).join(" · ");
   if (why) body.push(el("div", { class: "why" }, why));
   return el("div", { class: "item" }, body);
 }
 
 function renderActivity() {
   const recent = state.actions.slice(0, 60);
-  $("recent").replaceChildren(...(recent.length ? recent.map(actionItem) : [el("div", { class: "empty" }, "No changes yet")]));
+  $("recent").replaceChildren(...(recent.length ? recent.map(actionItem) : [el("div", { class: "empty" }, "尚未有更改")]));
   $("runs").replaceChildren(...(state.runs.length ? state.runs.map((r) => el("tr", {},
-    el("td", {}, new Date(r.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
-    el("td", {}, r.trigger === "schedule" ? "Hourly" : "Manual"),
+    el("td", {}, new Date(r.started_at).toLocaleString("zh-HK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
+    el("td", {}, r.trigger === "schedule" ? "每小時" : "手動"),
     el("td", {}, r.error ? "–" : (r.tasks_worked || []).length),
     el("td", {}, r.error ? "–" : r.systems_connected || 0),
     el("td", { class: (r.error || (r.errors || []).length) ? "err" : "" },
       r.error || (r.errors || []).map((e) => `${e.space}: ${e.error}`).join("; ") || "–",
-      r.trace ? el("details", {}, el("summary", {}, "Technical details"),
+      r.trace ? el("details", {}, el("summary", {}, "技術詳情"),
         el("pre", { style: "white-space:pre-wrap;font-size:11px;max-height:260px;overflow:auto" }, r.trace)) : null)))
-    : [el("tr", {}, el("td", { colspan: "5", class: "empty" }, "No runs yet"))]));
+    : [el("tr", {}, el("td", { colspan: "5", class: "empty" }, "尚未有執行紀錄"))]));
 }
 
 // -- Settings -----------------------------------------------------------------------------
@@ -709,7 +710,7 @@ function renderSettings() {
             state.settings = (await api("PATCH", "/api/settings", { autonomy: { [key]: v } })).settings;
             renderSettings();
           } catch (e) { toast(e.message); }
-        } }, v === "auto" ? "Auto" : "Ask")));
+        } }, v === "auto" ? "自動" : "詢問")));
     tiers.append(el("span", {}, label), seg);
   }
   $("partnersEnabled").checked = state.settings.partners_enabled !== false;
@@ -720,11 +721,11 @@ $("openSettings").onclick = () => { renderSettings(); $("partnerResults").textCo
 $("changePassword").onclick = async () => {
   const value = $("newPassword").value.trim();
   if (!value) { $("newPassword").focus(); return; }
-  if (!confirm("Change the password? Everyone else is signed out and needs the new one.")) return;
+  if (!confirm("更改密碼？其他人都會被登出，需要用新密碼登入。")) return;
   try {
     await api("POST", "/api/password", { password: value });
     $("newPassword").value = "";
-    toast("Password changed. Everyone else is signed out.");
+    toast("密碼已更改，其他人已被登出。");
   } catch (e) { toast(e.message); }
 };
 $("closeSettings").onclick = () => $("settingsDialog").close();
@@ -737,11 +738,11 @@ $("openaiModel").addEventListener("change", async (e) => {
   catch (err) { toast(err.message); }
 });
 $("testPartners").onclick = async () => {
-  const out = $("partnerResults"); out.replaceChildren(el("span", { class: "spinner" }), " testing…");
+  const out = $("partnerResults"); out.replaceChildren(el("span", { class: "spinner" }), " 測試中…");
   try {
     const { results } = await api("POST", "/api/partners/test");
     out.textContent = kb.partners.map((p) => [p, results[p.name]]).filter(([, r]) => r)
-      .map(([p, r]) => `${p.label}: ${r.ok ? "working" : r.detail}`).join(" · ");
+      .map(([p, r]) => `${p.label}：${r.ok ? "正常" : r.detail}`).join(" · ");
     refreshKnowledge();  // the test also updates the partners' rows on the Access tab
   } catch (e) { out.textContent = e.message; }
 };
@@ -750,7 +751,7 @@ $("autoAct").addEventListener("change", async (e) => {
   try {
     const { settings } = await api("PATCH", "/api/settings", { auto_act: e.target.checked });
     state.settings = settings;
-    toast(settings.auto_act ? "The assistant will act on its own (within your autonomy settings)" : "Paused: everything waits for your approval");
+    toast(settings.auto_act ? "助理會自行執行（在你的自主設定範圍內）" : "已暫停：一切都會等你批准");
   } catch (err) { e.target.checked = !e.target.checked; toast(err.message); }
 });
 
@@ -767,14 +768,14 @@ function renderProgress(p) {
   const head = el("div", { class: "line1" },
     el("span", { class: "spinner", "aria-hidden": "true" }),
     el("span", { class: "phase" }, `${p.phase}…`),
-    el("span", { class: "eta" }, p.trigger === "schedule" ? "hourly run" : ""));
-  const bar = el("div", { class: "bar indeterminate", role: "progressbar", "aria-label": "Run progress" }, el("div", {}));
+    el("span", { class: "eta" }, p.trigger === "schedule" ? "每小時執行" : ""));
+  const bar = el("div", { class: "bar indeterminate", role: "progressbar", "aria-label": "執行進度" }, el("div", {}));
   box.replaceChildren(head, bar);
   box.hidden = false;
 }
 
 function setRunning(on) {
-  const btn = $("runNow"); btn.disabled = on; btn.textContent = on ? "Running…" : "Run now";
+  const btn = $("runNow"); btn.disabled = on; btn.textContent = on ? "執行中…" : "立即執行";
 }
 
 async function pollProgress() {
@@ -788,7 +789,7 @@ async function pollProgress() {
     clearInterval(pollTimer); pollTimer = null;
     if (!ownRun) {  // an hourly run (or another tab's) just ended: show its results
       await load().catch(() => {});
-      if (p.finished_at) toast(p.error ? `Run failed: ${p.error}` : "Run finished");
+      if (p.finished_at) toast(p.error ? `執行失敗：${p.error}` : "執行完成");
     }
   }
 }
@@ -799,9 +800,9 @@ $("runNow").onclick = async () => {
   setTimeout(pollProgress, 700);
   try {
     const r = await api("POST", "/api/run");
-    toast(`Run finished: ${plural((r.tasks_worked || []).length, "task")} worked`);
+    toast(`執行完成：處理了 ${plural((r.tasks_worked || []).length, "個任務")}`);
   } catch (e) {
-    toast(/already in progress/.test(e.message) ? "A run is already going. Showing its progress." : e.message);
+    toast(/已有一次執行/.test(e.message) ? "已有一次執行正在進行，正在顯示進度。" : e.message);
   }
   await pollProgress();  // hides the panel once the run is over
   ownRun = false;
@@ -812,6 +813,8 @@ $("runNow").onclick = async () => {
 $("logout").onclick = async () => { await api("POST", "/logout").catch(() => {}); location.reload(); };
 
 // -- Browser: watch the AI's browser ---------------------------------------------------------
+const BROWSER_STEP = { open: "開啟", goto: "前往", click: "點擊", type: "輸入", press: "按鍵", select: "選擇", scroll: "捲動",
+  back: "上一頁", forward: "下一頁", reload: "重新載入", screenshot: "截圖", close: "關閉", sign_in: "登入" };
 const LIVE_MS = 30 * 1000;  // a screen this fresh means the AI is at it now
 let browserViews = [];
 const isLiveView = (v) => !v.closed && Date.now() - new Date(v.at).getTime() < LIVE_MS;
@@ -820,7 +823,7 @@ function renderBrowser() {
   $("browserLive").hidden = !browserViews.some(isLiveView);
   const box = $("screens");
   if (!browserViews.length) {
-    box.replaceChildren(el("div", { class: "empty" }, "The AI hasn't used its browser yet. Ask it to check a page, and watch here."));
+    box.replaceChildren(el("div", { class: "empty" }, "AI 尚未使用瀏覽器。請它檢查一個網頁，然後在這裡觀看。"));
     return;
   }
   const keep = new Map([...box.querySelectorAll(".screen")].map((n) => [n.dataset.id, n]));
@@ -831,12 +834,12 @@ function renderBrowser() {
     return el("div", { class: `screen${v.device === "mobile" ? " phone" : ""}`, "data-id": v.id, "data-at": v.at },
       el("div", { class: "top" },
         el("b", {}, partnerInfo((v.caller || "").split(" ")[0]).label || v.caller),
-        /\((task|voice)\)/.test(v.caller || "") ? el("span", {}, /task/.test(v.caller) ? "· working a task" : "· on a call") : null,
-        isLiveView(v) ? el("span", { class: "live" }, "live") : el("span", {}, v.closed ? "closed" : "idle"),
-        el("span", {}, `· ${v.action}`),
+        /\((task|voice)\)/.test(v.caller || "") ? el("span", {}, /task/.test(v.caller) ? "· 處理任務中" : "· 通話中") : null,
+        isLiveView(v) ? el("span", { class: "live" }, "即時") : el("span", {}, v.closed ? "已關閉" : "閒置"),
+        el("span", {}, `· ${BROWSER_STEP[v.action] || v.action}`),
         el("span", { class: "when" }, ago(v.at)),
         link ? el("a", { href: link, target: "_blank", rel: "noopener" }, v.title || v.url) : el("span", {}, v.title || "")),
-      v.image ? el("img", { src: `data:image/jpeg;base64,${v.image}`, alt: `Screenshot of ${v.title || v.url || "the page"}` }) : null,
+      v.image ? el("img", { src: `data:image/jpeg;base64,${v.image}`, alt: `${v.title || v.url || "網頁"} 的截圖` }) : null,
       v.error ? el("div", { class: "err" }, v.error) : null);
   }));
 }

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant-HK">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -185,118 +185,117 @@
 <body data-version="{{ version }}">
 <header>
   <div class="brand"><span class="dot" id="dot"></span>Talent Solutions AI</div>
-  <div class="lastrun" id="lastrun">Loading…</div>
-  <label class="toggle" title="When off, everything the assistant would do waits for your approval">
-    <input type="checkbox" id="autoAct"><span class="track"></span><span>Act automatically</span>
+  <div class="lastrun" id="lastrun">載入中…</div>
+  <label class="toggle" title="關閉後，助理要做的每件事都會先等你批准">
+    <input type="checkbox" id="autoAct"><span class="track"></span><span>自動執行</span>
   </label>
-  <button class="btn primary" id="runNow">Run now</button>
-  <button class="iconbtn" id="openSettings" title="Settings" aria-label="Settings">⚙</button>
-  <button class="btn" id="logout">Sign out</button>
+  <button class="btn primary" id="runNow">立即執行</button>
+  <button class="iconbtn" id="openSettings" title="設定" aria-label="設定">⚙</button>
+  <button class="btn" id="logout">登出</button>
 </header>
 
 <main>
   <div id="progress" class="progress" hidden aria-live="polite"></div>
   <div id="banners"></div>
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="board">Board <span class="count" id="boardCount">0</span></button>
-    <button class="tab" data-tab="projects">Projects <span class="count" id="projectCount">0</span></button>
-    <button class="tab" data-tab="questions">Questions <span class="count" id="questionCount">0</span></button>
-    <button class="tab" data-tab="access">Access <span class="count" id="accessCount">0</span></button>
-    <button class="tab" data-tab="browser">Browser <span class="live" id="browserLive" hidden>live</span></button>
-    <button class="tab" data-tab="activity">Activity</button>
+    <button class="tab active" data-tab="board">工作板 <span class="count" id="boardCount">0</span></button>
+    <button class="tab" data-tab="projects">項目 <span class="count" id="projectCount">0</span></button>
+    <button class="tab" data-tab="questions">問題 <span class="count" id="questionCount">0</span></button>
+    <button class="tab" data-tab="access">系統權限 <span class="count" id="accessCount">0</span></button>
+    <button class="tab" data-tab="browser">瀏覽器 <span class="live" id="browserLive" hidden>即時</span></button>
+    <button class="tab" data-tab="activity">活動紀錄</button>
   </nav>
 
   <section id="view-board">
     <div class="toolbar">
-      <input type="search" id="q" placeholder="Search tasks" aria-label="Search tasks">
-      <select id="ownerFilter" aria-label="Owner">
-        <option value="">Everyone</option>
-        <option value="me">Mine</option>
-        <option value="others">Others'</option>
+      <input type="search" id="q" placeholder="搜尋任務" aria-label="搜尋任務">
+      <select id="ownerFilter" aria-label="負責人">
+        <option value="">所有人</option>
+        <option value="me">我的</option>
+        <option value="others">其他人的</option>
       </select>
-      <label class="check"><input type="checkbox" id="showDone"> Show done</label>
+      <label class="check"><input type="checkbox" id="showDone"> 顯示已完成</label>
       <span class="spacer"></span>
-      <button class="btn primary" id="newTask">+ New task</button>
+      <button class="btn primary" id="newTask">+ 新任務</button>
     </div>
     <div class="board">
-      <div class="col" data-status="todo"><h2>To do <span class="count"></span></h2><div class="cards"></div></div>
-      <div class="col" data-status="in_progress"><h2>In progress <span class="count"></span></h2><div class="cards"></div></div>
-      <div class="col" data-status="done"><h2>Done <span class="count"></span></h2><div class="cards"></div></div>
+      <div class="col" data-status="todo"><h2>待辦 <span class="count"></span></h2><div class="cards"></div></div>
+      <div class="col" data-status="in_progress"><h2>進行中 <span class="count"></span></h2><div class="cards"></div></div>
+      <div class="col" data-status="done"><h2>已完成 <span class="count"></span></h2><div class="cards"></div></div>
     </div>
   </section>
 
   <section id="view-projects" hidden>
-    <p class="hint">Every project the assistant knows about. It adds them from your answers and conversations with it; you can add and correct them too.</p>
+    <p class="hint">助理知道的所有項目。它會從你的回答和對話中加入項目，你亦可以自行新增和修改。</p>
     <div class="toolbar">
-      <select id="companyFilter" aria-label="Company">
-        <option value="">Both companies</option>
+      <select id="companyFilter" aria-label="公司">
+        <option value="">兩間公司</option>
         <option value="helperconnects">HelperConnects</option>
         <option value="helperxpress">HelperXpress</option>
       </select>
-      <select id="projectStatusFilter" aria-label="Status">
-        <option value="">Any status</option>
-        <option value="active">Active</option><option value="blocked">Blocked</option>
-        <option value="paused">Paused</option><option value="done">Done</option><option value="unknown">Unknown</option>
+      <select id="projectStatusFilter" aria-label="狀態">
+        <option value="">所有狀態</option>
+        <option value="active">進行中</option><option value="blocked">受阻</option>
+        <option value="paused">暫停</option><option value="done">已完成</option><option value="unknown">未知</option>
       </select>
       <span class="spacer"></span>
-      <button class="btn primary" id="newProject">+ New project</button>
+      <button class="btn primary" id="newProject">+ 新項目</button>
     </div>
     <div class="grid" id="projects"></div>
   </section>
 
   <section id="view-questions" hidden>
-    <p class="hint">What Talent Solutions AI needs to know to run things on its own. Answer here, or in the chat at the bottom right, typed or out loud with 🎙 Talk.</p>
+    <p class="hint">Talent Solutions AI 要自己處理工作，需要知道這些。你可以在這裡回答，或在右下角的對話中打字或用 🎙 通話回答。</p>
     <div id="openQuestions"></div>
-    <h3>Answered</h3>
+    <h3>已回答</h3>
     <div id="answeredQuestions"></div>
   </section>
 
   <section id="view-access" hidden>
-    <p class="hint">Systems Talent Solutions AI can use, and the ones it still needs. Ask it in the chat how to connect any of them; it will walk you through it.</p>
+    <p class="hint">Talent Solutions AI 可以使用的系統，以及仍然需要的系統。在對話中問它如何連接任何一個，它會一步步教你。</p>
     <div class="banner" id="setupBanner" style="white-space: pre-line" hidden></div>
-    <p class="actions"><a class="btn primary" href="/connect/setup" id="connectAll">Connect everything</a>
-      <button class="btn" id="checkSystems">Check connections</button>
-      <span class="hint">Connect everything asks Google once for your OK as the project owner, gives the app access to
-        each stored key it needs, and tests every system. Keys stay on the server; the AI never sees them.</span></p>
+    <p class="actions"><a class="btn primary" href="/connect/setup" id="connectAll">全部連接</a>
+      <button class="btn" id="checkSystems">檢查連接</button>
+      <span class="hint">「全部連接」會以項目擁有人身份向 Google 取得一次許可，讓應用程式讀取所需的每條已儲存金鑰，並測試每個系統。金鑰只留在伺服器，AI 永遠看不到。</span></p>
     <div id="systems"></div>
   </section>
 
   <section id="view-browser" hidden>
-    <p class="hint">What Talent Solutions AI sees in its web browser: the latest screen after each step, updated live while it works.</p>
+    <p class="hint">Talent Solutions AI 在瀏覽器中看到的畫面：每一步之後的最新畫面，工作時即時更新。</p>
     <div id="screens"></div>
   </section>
 
   <section id="view-activity" hidden>
-    <h3>Changes made</h3>
+    <h3>已作出的更改</h3>
     <div id="recent"></div>
-    <h3>Runs</h3>
+    <h3>執行紀錄</h3>
     <div class="tablewrap"><table class="runs"><thead><tr>
-      <th>When</th><th>Trigger</th><th>Tasks worked</th><th>Systems connected</th><th>Problems</th>
+      <th>時間</th><th>觸發</th><th>處理的任務</th><th>已連接系統</th><th>問題</th>
     </tr></thead><tbody id="runs"></tbody></table></div>
   </section>
 </main>
 
-<aside class="chatwin" id="chat" aria-label="Talent Solutions AI chat">
+<aside class="chatwin" id="chat" aria-label="Talent Solutions AI 對話">
   <div class="chathead">
     <h2>Talent Solutions AI</h2>
-    <button class="hbtn" id="readAloud" aria-pressed="false" title="Read new replies aloud">🔊 Read aloud</button>
-    <button class="hbtn" id="clearTalk" title="Start a new conversation">Clear</button>
-    <button class="hbtn min" id="minimizeChat" title="Minimize" aria-label="Minimize chat">–</button>
+    <button class="hbtn" id="readAloud" aria-pressed="false" title="朗讀新回覆">🔊 朗讀</button>
+    <button class="hbtn" id="clearTalk" title="開始新對話">清除</button>
+    <button class="hbtn min" id="minimizeChat" title="縮小" aria-label="縮小對話">–</button>
   </div>
-  <div class="partners" id="partners" role="group" aria-label="Who you're talking to"></div>
+  <div class="partners" id="partners" role="group" aria-label="對話對象"></div>
   <div class="thread" id="thread" aria-live="polite"></div>
   <div>
     <div class="voicebar" id="voicebar" hidden>
       <span class="pulse" aria-hidden="true"></span>
-      <span class="vstate" id="vstate">Connecting…</span>
-      <span class="meter" title="Your microphone level"><div id="vmeter"></div></span>
-      <button class="btn" id="vmute">Mute</button>
-      <button class="btn danger" id="vend">End call</button>
+      <span class="vstate" id="vstate">連接中…</span>
+      <span class="meter" title="你的咪高峰音量"><div id="vmeter"></div></span>
+      <button class="btn" id="vmute">靜音</button>
+      <button class="btn danger" id="vend">結束通話</button>
     </div>
     <div class="composer" id="composer">
-      <textarea id="message" placeholder="Message Talent Solutions AI…" aria-label="Message" title="Enter to send, Shift+Enter for a new line"></textarea>
-      <button class="btn mic" id="startVoice" title="Talk live">🎙 Talk</button>
-      <button class="btn primary" id="send">Send</button>
+      <textarea id="message" placeholder="傳訊息給 Talent Solutions AI…" aria-label="訊息" title="按 Enter 傳送，Shift+Enter 換行"></textarea>
+      <button class="btn mic" id="startVoice" title="即時通話">🎙 通話</button>
+      <button class="btn primary" id="send">傳送</button>
     </div>
   </div>
 </aside>
@@ -304,87 +303,87 @@
 
 <dialog id="taskDialog">
   <form method="dialog" id="taskForm">
-    <h2 id="taskDialogTitle">Task</h2>
-    <label>Title <input name="title" required maxlength="200"></label>
-    <label>Details <textarea name="detail" maxlength="2000"></textarea></label>
+    <h2 id="taskDialogTitle">任務</h2>
+    <label>標題 <input name="title" required maxlength="200"></label>
+    <label>詳情 <textarea name="detail" maxlength="2000"></textarea></label>
     <div class="row">
-      <label>Owner <input name="owner" maxlength="100" placeholder="Name"></label>
-      <label>Due <input name="due" type="date"></label>
+      <label>負責人 <input name="owner" maxlength="100" placeholder="姓名"></label>
+      <label>到期日 <input name="due" type="date"></label>
     </div>
     <div class="row">
-      <label>Status <select name="status"><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option></select></label>
-      <label>Priority <select name="priority"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+      <label>狀態 <select name="status"><option value="todo">待辦</option><option value="in_progress">進行中</option><option value="done">已完成</option></select></label>
+      <label>優先次序 <select name="priority"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></label>
     </div>
-    <label class="check"><input type="checkbox" name="owner_is_me"> This is mine</label>
+    <label class="check"><input type="checkbox" name="owner_is_me"> 這是我的</label>
     <div id="taskSource" class="why"></div>
     <div id="taskResult" class="report" hidden></div>
     <div class="dialog-foot">
-      <button type="button" class="btn danger left" id="deleteTask">Delete</button>
-      <button type="button" class="btn" id="cancelTask">Cancel</button>
-      <button type="button" class="btn" id="workTask" title="Talent Solutions AI works on it now with its tools, and again every hour until it's done">🤖 Give to Talent Solutions AI</button>
-      <button type="submit" class="btn primary">Save</button>
+      <button type="button" class="btn danger left" id="deleteTask">刪除</button>
+      <button type="button" class="btn" id="cancelTask">取消</button>
+      <button type="button" class="btn" id="workTask" title="Talent Solutions AI 會立即用它的工具處理，之後每小時再處理，直到完成">🤖 交給 Talent Solutions AI</button>
+      <button type="submit" class="btn primary">儲存</button>
     </div>
   </form>
 </dialog>
 
 <dialog id="projectDialog">
   <form method="dialog" id="projectForm">
-    <h2 id="projectDialogTitle">Project</h2>
-    <label>Name <input name="name" required maxlength="200"></label>
+    <h2 id="projectDialogTitle">項目</h2>
+    <label>名稱 <input name="name" required maxlength="200"></label>
     <div class="row">
-      <label>Company <select name="company"><option value="">Not set</option><option value="helperconnects">HelperConnects</option><option value="helperxpress">HelperXpress</option><option value="both">Both</option></select></label>
-      <label>Status <select name="status"><option value="active">Active</option><option value="blocked">Blocked</option><option value="paused">Paused</option><option value="done">Done</option><option value="unknown">Unknown</option></select></label>
+      <label>公司 <select name="company"><option value="">未設定</option><option value="helperconnects">HelperConnects</option><option value="helperxpress">HelperXpress</option><option value="both">兩者</option></select></label>
+      <label>狀態 <select name="status"><option value="active">進行中</option><option value="blocked">受阻</option><option value="paused">暫停</option><option value="done">已完成</option><option value="unknown">未知</option></select></label>
     </div>
     <div class="row">
-      <label>Owner <input name="owner" maxlength="100"></label>
-      <label>Deadline <input name="deadline" type="date"></label>
+      <label>負責人 <input name="owner" maxlength="100"></label>
+      <label>截止日期 <input name="deadline" type="date"></label>
     </div>
-    <label>Goal <textarea name="goal" maxlength="2000"></textarea></label>
-    <label>Where it stands <textarea name="summary" maxlength="2000"></textarea></label>
-    <label>Next steps <textarea name="next_steps" maxlength="2000"></textarea></label>
+    <label>目標 <textarea name="goal" maxlength="2000"></textarea></label>
+    <label>目前進度 <textarea name="summary" maxlength="2000"></textarea></label>
+    <label>下一步 <textarea name="next_steps" maxlength="2000"></textarea></label>
     <div id="projectSource" class="why"></div>
     <div class="dialog-foot">
-      <button type="button" class="btn danger left" id="deleteProject">Delete</button>
-      <button type="button" class="btn" id="cancelProject">Cancel</button>
-      <button type="submit" class="btn primary">Save</button>
+      <button type="button" class="btn danger left" id="deleteProject">刪除</button>
+      <button type="button" class="btn" id="cancelProject">取消</button>
+      <button type="submit" class="btn primary">儲存</button>
     </div>
   </form>
 </dialog>
 
 <dialog id="connectDialog">
   <form method="dialog" id="connectForm">
-    <h2 id="connectTitle">Connect</h2>
+    <h2 id="connectTitle">連接</h2>
     <p class="why" id="connectHelp"></p>
     <div id="connectFields"></div>
-    <p class="hint">Saved straight into Secret Manager. It isn't shown again, and the AI never sees it.</p>
+    <p class="hint">直接儲存到 Secret Manager，之後不會再顯示，AI 亦永遠看不到。</p>
     <div class="dialog-foot">
-      <button type="button" class="btn" id="cancelConnect">Cancel</button>
-      <button type="submit" class="btn primary" id="saveConnect">Connect</button>
+      <button type="button" class="btn" id="cancelConnect">取消</button>
+      <button type="submit" class="btn primary" id="saveConnect">連接</button>
     </div>
   </form>
 </dialog>
 
 <dialog id="settingsDialog">
   <form method="dialog" id="settingsForm">
-    <h2>Settings</h2>
-    <h4>What the assistant does on its own</h4>
-    <p class="why" style="margin:0">Auto: it acts and logs it. Ask: it proposes in Activity and waits for you. "Act automatically" in the header pauses everything.</p>
+    <h2>設定</h2>
+    <h4>助理可以自行處理的事</h4>
+    <p class="why" style="margin:0">自動：直接執行並記錄。詢問：在活動紀錄提出建議並等你決定。頁首的「自動執行」可以暫停一切。</p>
     <div class="tiers" id="tiers"></div>
-    <h4>AI partners</h4>
-    <label class="check"><input type="checkbox" id="partnersEnabled"> Let Claude and ChatGPT work with company information (it leaves Google Cloud)</label>
-    <label>ChatGPT model <input id="openaiModel" placeholder="default (gpt-5)" maxlength="60"></label>
+    <h4>AI 夥伴</h4>
+    <label class="check"><input type="checkbox" id="partnersEnabled"> 讓 Claude 和 ChatGPT 使用公司資料（資料會離開 Google Cloud）</label>
+    <label>ChatGPT 模型 <input id="openaiModel" placeholder="預設（gpt-5）" maxlength="60"></label>
     <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button type="button" class="btn" id="testPartners">Test partners</button>
+      <button type="button" class="btn" id="testPartners">測試夥伴</button>
       <span class="why" id="partnerResults"></span>
     </div>
-    <h4>Sign-in password</h4>
-    <p class="why" style="margin:0">Everyone uses one password. Changing it signs everyone else out. A few words are much harder to guess than a number.</p>
+    <h4>登入密碼</h4>
+    <p class="why" style="margin:0">所有人共用一個密碼。更改後其他人都會被登出。幾個詞語組成的密碼比數字難猜得多。</p>
     <div class="actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input type="password" id="newPassword" aria-label="New password" placeholder="New password" autocomplete="new-password" maxlength="200" style="flex:1;min-width:160px">
-      <button type="button" class="btn" id="changePassword">Change password</button>
+      <input type="password" id="newPassword" aria-label="新密碼" placeholder="新密碼" autocomplete="new-password" maxlength="200" style="flex:1;min-width:160px">
+      <button type="button" class="btn" id="changePassword">更改密碼</button>
     </div>
     <div class="dialog-foot">
-      <button type="button" class="btn primary" id="closeSettings">Done</button>
+      <button type="button" class="btn primary" id="closeSettings">完成</button>
     </div>
   </form>
 </dialog>

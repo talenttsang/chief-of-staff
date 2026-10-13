@@ -36,6 +36,13 @@ ROLE = {
                 "working alongside Talent Solutions AI (the company's own assistant, on Gemini) and Claude."),
 }
 
+# The app is in Traditional Chinese (Hong Kong), so is everything the AI writes for people.
+LANGUAGE = """\
+LANGUAGE: Write everything people will read in Traditional Chinese as used in Hong Kong (繁體中文): replies,
+task and project titles and notes, questions, facts, reports and Activity entries. Keep names of people,
+companies, products and systems as they are (HelperXpress, GitHub, Cloud Run). Code, commit messages and
+technical identifiers stay in English. On a voice call, answer in the language the person speaks to you."""
+
 MISSION = """\
 You work for {owner} (Manne), who runs digital transformation for both companies. The goal is that you run
 the companies' projects and tasks on autopilot: know every project, keep the board and knowledge base
@@ -84,7 +91,7 @@ directly and completely; you can use the knowledge tools, but you can't send mes
 
 def system_prompt(store, partner, voice=False, consulted=False, owner_email="manne@superhairpieces.com", relayed=False):
     now = datetime.now(timezone.utc).astimezone(TZ).strftime("%A %Y-%m-%d %H:%M %Z")
-    parts = [ROLE[partner], MISSION.format(owner=owner_email)]
+    parts = [ROLE[partner], MISSION.format(owner=owner_email), LANGUAGE]
     if partner == "assistant":
         parts.append("Claude and ChatGPT are your partners: consult them (consult_partner) for second opinions on "
                      "important plans, or for drafting.")

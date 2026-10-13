@@ -25,11 +25,11 @@
       $("voicebar").hidden = false;
       $("startVoice").disabled = true;
       // Each step says what it's waiting for, so a stall is never just "Connecting…".
-      setState("Allow the microphone: look for the prompt next to the address bar");
+      setState("請允許使用咪高峰：留意網址列旁邊的提示");
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      setState("Starting the microphone…");
+      setState("正在啟動咪高峰…");
       this.inCtx = new AudioContext();
       await this.inCtx.audioWorklet.addModule("/static/pcm-capture.js");
       this.node = new AudioWorkletNode(this.inCtx, "pcm-capture", { processorOptions: { targetRate: 16000 } });
@@ -38,22 +38,22 @@
       if (this.inCtx.state === "suspended") await this.inCtx.resume();
       this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
 
-      setState("Opening the voice line…");
+      setState("正在開啟語音線路…");
       const scheme = location.protocol === "https:" ? "wss" : "ws";
       this.ws = new WebSocket(`${scheme}://${location.host}/ws/voice?partner=${encodeURIComponent(this.partner)}`);
       this.ws.binaryType = "arraybuffer";
       this.ws.onopen = () => {
-        setState("Connecting the call…");  // the server names the model it's reaching next
+        setState("正在接通…");  // the server names the model it's reaching next
         this.watchdog = setTimeout(() => {
-          if (!this.ready) this.fail("The voice service didn't answer within 25 seconds. Try again in a moment.");
+          if (!this.ready) this.fail("語音服務在 25 秒內沒有回應，請稍後再試。");
         }, 25000);
       };
       this.ws.onmessage = (e) => (typeof e.data === "string" ? this.onJson(JSON.parse(e.data)) : this.play(e.data));
       this.ws.onclose = (e) => {
-        if (!this.ready && !this.ended) this.fail(e.code === 1006 ? "The voice line dropped before it was ready." : `The voice line closed (${e.code}).`);
+        if (!this.ready && !this.ended) this.fail(e.code === 1006 ? "語音線路在準備好之前中斷了。" : `語音線路已關閉（${e.code}）。`);
         else this.end(false);
       };
-      this.ws.onerror = () => { if (!this.ready) this.fail("Couldn't open the voice line."); };
+      this.ws.onerror = () => { if (!this.ready) this.fail("無法開啟語音線路。"); };
     }
 
     fail(message) {
@@ -72,12 +72,12 @@
     onJson(msg) {
       if (msg.type === "ready") {  // names the model on the line, so it's plain who's answering
         this.ready = true; clearTimeout(this.watchdog);
-        setState(msg.model ? `Listening (${msg.model}). Go ahead and talk` : "Listening. Go ahead and talk");
+        setState(msg.model ? `正在聆聽（${msg.model}），請說話` : "正在聆聽，請說話");
       }
       else if (msg.type === "status") setState(msg.text);
       else if (msg.type === "transcript") {
         this.live[msg.who] += msg.text;
-        if (msg.who === "assistant") setState("Speaking…");
+        if (msg.who === "assistant") setState("正在說話…");
         this.renderLive();
       } else if (msg.type === "tool") setState(msg.name === `ask_${this.partner}` ? `${this.label} is thinking…` : `Working: ${msg.name.replace(/_/g, " ")}…`);
       else if (msg.type === "interrupted") { this.stopPlayback(); setState("Listening…"); }
@@ -126,8 +126,8 @@
 
     toggleMute() {
       this.muted = !this.muted;
-      $("vmute").textContent = this.muted ? "Unmute" : "Mute";
-      setState(this.muted ? "Muted" : "Listening…");
+      $("vmute").textContent = this.muted ? "取消靜音" : "靜音";
+      setState(this.muted ? "已靜音" : "正在聆聽…");
     }
 
     end(sendStop = true) {
@@ -141,9 +141,9 @@
       try { this.inCtx && this.inCtx.close(); } catch { /* closed */ }
       try { this.outCtx && this.outCtx.close(); } catch { /* closed */ }
       $("voicebar").hidden = true;
-      setState("Connecting…");  // what the next call starts from
+      setState("連接中…");  // what the next call starts from
       $("startVoice").disabled = false;
-      $("vmute").textContent = "Mute";
+      $("vmute").textContent = "靜音";
       call = null;
       setTimeout(() => A.loadTalk(), 800);  // the server saved the finished turns into the conversation
     }
@@ -153,14 +153,14 @@
 
   $("startVoice").onclick = async () => {
     if (call) return;
-    if (!navigator.mediaDevices || !window.AudioWorkletNode) { A.toast("This browser can't do live voice. Try Chrome or Edge."); return; }
+    if (!navigator.mediaDevices || !window.AudioWorkletNode) { A.toast("這個瀏覽器不支援即時語音，請改用 Chrome 或 Edge。"); return; }
     call = new VoiceCall(A.partner);
     try { await call.start(); }
     catch (e) {
       const why = {
-        NotAllowedError: "The microphone is blocked. Allow it in the site settings (lock icon in the address bar) and try again.",
-        NotFoundError: "No microphone found. Plug one in or pick one in your system settings.",
-        NotReadableError: "The microphone is busy in another app. Close it there and try again.",
+        NotAllowedError: "咪高峰被封鎖了。請在網站設定（網址列的鎖頭圖示）中允許，然後再試。",
+        NotFoundError: "找不到咪高峰。請接上一個，或在系統設定中選擇。",
+        NotReadableError: "咪高峰正被另一個應用程式使用。請先關閉它，然後再試。",
       }[e.name] || e.message;
       A.toast(why);
       call && call.end(false);

@@ -51,7 +51,7 @@ class KnowledgeTests(unittest.TestCase):
         knowledge.add_fact(store, "SkuVault is the source of truth for stock")
         text = knowledge.brief(store, store.get_settings())
         for needle in ("FBM Removal", "SkuVault is the source", "OPEN QUESTIONS", "- connected:", "AUTONOMY",
-                       "Refunds, prices, discounts, ad budgets, payments: ask"):
+                       "退款、價格、折扣、廣告預算、付款: ask"):
             self.assertIn(needle, text)
         self.assertIn("FBM Removal", knowledge.brief(store, compact=True))
         self.assertIn("HelperXpress", knowledge.company_background())
@@ -132,7 +132,7 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(self.store.get_item("systems", "hosting")["status"], "requested")
         self.tools.call("request_access", {"system": "Shopify", "why": "Gen'C store"})
         self.assertTrue(any(s["name"] == "Shopify" for s in self.store.list_items("systems")))
-        self.assertIn("note", self.tools.call("request_access", {"system": "Google Calendar", "why": "x"}))
+        self.assertIn("note", self.tools.call("request_access", {"system": "google_calendar", "why": "x"}))
         self.tools.call("set_autopilot", {"on": False})
         self.assertFalse(self.tools.call("assistant_status", {})["autopilot_on"])
 

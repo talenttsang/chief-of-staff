@@ -151,10 +151,10 @@ def one_address():
 def guard():
     if request.path.startswith("/api/"):
         if not signed_in():
-            return jsonify(error="Sign in first."), 401
+            return jsonify(error="請先登入。"), 401
         # CSRF: browsers can't add a custom header cross-site without a CORS preflight we never allow.
         if request.method != "GET" and request.headers.get(CSRF_HEADER) != "1":
-            return jsonify(error="Missing request header."), 403
+            return jsonify(error="缺少請求標頭。"), 403
 
 
 @app.after_request
@@ -209,10 +209,10 @@ def login():
     now, address = time.time(), client_address()
     wait = login_wait(address, now)
     if wait:
-        return login_page(f"Too many wrong passwords. Try again in {max(1, round(wait / 60))} min.", 429)
+        return login_page(f"密碼錯誤次數太多，請於 {max(1, round(wait / 60))} 分鐘後再試。", 429)
     if not hmac.compare_digest(request.form.get("password", "").strip().encode(), current.encode()):
         store.add_login_failure(address, now)
-        return login_page("That's not the password.", 401)
+        return login_page("密碼不正確。", 401)
     session.clear()
     session.permanent = True
     session["signed_in"] = password_mark(current)
@@ -225,8 +225,8 @@ def connect_google():
     if not signed_in():
         return redirect("/")
     if not oauth_client_config():
-        return oauth_error(f"The Google client isn't set up yet: store its JSON in Secret Manager as "
-                           f"{OAUTH_CLIENT_SECRET_ID} (redirect URI {redirect_uri()}).", 503)
+        return oauth_error(f"Google 用戶端尚未設定：請把它的 JSON 儲存到 Secret Manager，名稱為 "
+                           f"{OAUTH_CLIENT_SECRET_ID}（重新導向 URI：{redirect_uri()}）。", 503)
     flow = make_flow(ASSISTANT_SCOPES)
     url, state = flow.authorization_url(prompt="consent", access_type="offline",
                                         **({"login_hint": GOOGLE_ACCOUNT} if GOOGLE_ACCOUNT else {}))
@@ -243,7 +243,7 @@ def connect_setup():
     if not signed_in():
         return redirect("/")
     if not oauth_client_config():
-        return oauth_error(f"The Google client isn't set up yet ({OAUTH_CLIENT_SECRET_ID}).", 503)
+        return oauth_error(f"Google 用戶端尚未設定（{OAUTH_CLIENT_SECRET_ID}）。", 503)
     flow = make_flow(IDENTITY_SCOPES + [cloud_setup.CLOUD_SCOPE])
     # online: only a one-hour token, no refresh token (the library asks for offline unless told otherwise)
     url, state = flow.authorization_url(login_hint=OWNER_EMAIL, **HOSTED_DOMAIN, access_type="online")
@@ -259,9 +259,9 @@ def oauth_callback():
         return redirect("/")
     pending = session.pop("oauth", None)
     if request.args.get("error"):
-        return oauth_error(f"Google was cancelled ({request.args['error']}).")
+        return oauth_error(f"Google 連接已取消（{request.args['error']}）。")
     if not pending or not hmac.compare_digest(request.args.get("state", ""), pending["state"]):
-        return oauth_error("That Google link expired. Please try again.")
+        return oauth_error("Google 連結已過期，請再試一次。")
 
     from google.auth.transport.requests import Request
     from google.oauth2 import id_token
@@ -277,16 +277,16 @@ def oauth_callback():
         creds = naive_utc_expiry(flow.credentials)
         claims = id_token.verify_oauth2_token(creds.id_token, Request(), flow.client_config["client_id"])
     except Exception as exc:  # noqa: BLE001 - shown to the user, who can retry
-        return oauth_error(f"Google said no: {exc}")
+        return oauth_error(f"Google 拒絕了：{exc}")
 
     email = (claims.get("email") or "").lower()
     if not claims.get("email_verified"):
-        return oauth_error(f"Google hasn't verified {email or 'that account'}'s email address.", 403)
+        return oauth_error(f"Google 尚未驗證 {email or '該帳戶'} 的電郵地址。", 403)
     # Connect everything acts as whoever owns the Cloud project (Google checks what that account may do);
     # Talent Solutions AI's own Google access must be GOOGLE_ACCOUNT's.
     if pending["connect"] and GOOGLE_ACCOUNT and email != GOOGLE_ACCOUNT:
-        return oauth_error(f"That was {email}. Connect Google as {GOOGLE_ACCOUNT}: press Connect again and pick "
-                           "that account (or \"Use another account\").", 403)
+        return oauth_error(f"剛才登入的是 {email}。請以 {GOOGLE_ACCOUNT} 連接 Google：再按「連接」並選擇該帳戶"
+                           "（或「使用其他帳戶」）。", 403)
 
     if setup:
         # The owner's token is used here and dropped: nothing about it is stored.
@@ -297,8 +297,8 @@ def oauth_callback():
 
     if pending["connect"]:
         if not creds.refresh_token:
-            return oauth_error("Google didn't return long-term access. Remove the app at "
-                               "myaccount.google.com/permissions and connect again.")
+            return oauth_error("Google 沒有給予長期存取權。請在 myaccount.google.com/permissions "
+                               "移除此應用程式，然後再連接。")
         granted = flow.oauth2session.token.get("scope") or []
         granted = set(granted.split() if isinstance(granted, str) else granted)
         missing = sorted(s.rsplit("/", 1)[-1] for s in ASSISTANT_SCOPES if s not in granted and s != "openid")
@@ -319,7 +319,7 @@ def api_password():
     """Change the password. This browser stays signed in; every other one is signed out."""
     new = str((request.get_json(force=True) or {}).get("password", "")).strip()
     if len(new) < 4 or len(new) > 200:
-        return jsonify(error="Use 4 to 200 characters. Longer is safer: a few words are hard to guess."), 400
+        return jsonify(error="請用 4 至 200 個字元。越長越安全：幾個詞語組成的密碼很難猜。"), 400
     try:
         secret_store.put(PASSWORD_SECRET_ID, new)
     except Exception as exc:  # noqa: BLE001 - the app may not have been allowed to change it
@@ -384,7 +384,7 @@ def scopes_missing_from(token_json):
 def api_create_task():
     fields = _clean_task(request.get_json(force=True) or {})
     if not fields.get("title"):
-        return jsonify(error="A task needs a title."), 400
+        return jsonify(error="任務需要標題。"), 400
     now = utcnow_iso()
     task = store.save_task(pysecrets.token_hex(10), {
         "detail": "", "owner": "", "owner_is_me": True, "due": "", "priority": "medium", "status": "todo",
@@ -397,7 +397,7 @@ def api_create_task():
 def api_work_task(task_id):
     """Give a task to the assistant and let it work it now (it reports on the task and in the chat)."""
     if not store.get_task(task_id):
-        return jsonify(error="No such task."), 404
+        return jsonify(error="找不到此任務。"), 404
     try:
         outcome = worker.work_on(talk_service(), store, task_id)
     except worker.Busy as exc:
@@ -411,10 +411,10 @@ def api_work_task(task_id):
 @app.patch("/api/tasks/<task_id>")
 def api_update_task(task_id):
     if not store.get_task(task_id):
-        return jsonify(error="No such task."), 404
+        return jsonify(error="找不到此任務。"), 404
     fields = _clean_task(request.get_json(force=True) or {})
     if "title" in fields and not fields["title"]:
-        return jsonify(error="A task needs a title."), 400
+        return jsonify(error="任務需要標題。"), 400
     task = store.save_task(task_id, {**fields, "user_edited": True, "updated_at": utcnow_iso()})
     return jsonify(task=task)
 
@@ -481,13 +481,13 @@ def partner_models(name):
 def api_answer_question(question_id):
     q = store.get_item("questions", question_id)
     if not q:
-        return jsonify(error="No such question."), 404
+        return jsonify(error="找不到此問題。"), 404
     answer = str((request.get_json(force=True) or {}).get("answer", "")).strip()
     if not answer:
-        return jsonify(error="Type an answer first."), 400
+        return jsonify(error="請先輸入答案。"), 400
     if NOT_AN_ANSWER.match(answer):  # "not relevant": remove the question rather than keep it as answered
         store.delete_item("questions", question_id)
-        return jsonify(question=None, note="Removed: it isn't relevant.", tools=[])
+        return jsonify(question=None, note="已移除：與此無關。", tools=[])
     now = utcnow_iso()
     store.save_item("questions", question_id, {"status": "answered", "answer": answer[:8000], "answered_at": now,
                                                "updated_at": now})
@@ -506,7 +506,7 @@ def api_answer_question(question_id):
 def api_dismiss_question(question_id):
     """Skip: the question is removed entirely, not kept as "dismissed"."""
     if not store.get_item("questions", question_id):
-        return jsonify(error="No such question."), 404
+        return jsonify(error="找不到此問題。"), 404
     store.delete_item("questions", question_id)
     return jsonify(deleted=True)
 
@@ -516,7 +516,7 @@ def api_add_question():
     body = request.get_json(force=True) or {}
     q = knowledge.add_question(store, body.get("question", ""), body.get("why", ""), body.get("project_id", ""),
                                body.get("priority", 2), source="you")
-    return (jsonify(question=q), 200) if q else (jsonify(error="Type a question."), 400)
+    return (jsonify(question=q), 200) if q else (jsonify(error="請輸入問題。"), 400)
 
 
 PROJECT_FIELDS = ("name", "company", "goal", "owner", "status", "deadline", "summary", "next_steps")
@@ -526,13 +526,13 @@ PROJECT_FIELDS = ("name", "company", "goal", "owner", "status", "deadline", "sum
 def api_create_project():
     body = request.get_json(force=True) or {}
     project = knowledge.save_project(store, {k: body.get(k) for k in PROJECT_FIELDS}, source="you")
-    return (jsonify(project=project), 200) if project else (jsonify(error="A project needs a name."), 400)
+    return (jsonify(project=project), 200) if project else (jsonify(error="項目需要名稱。"), 400)
 
 
 @app.patch("/api/projects/<project_id>")
 def api_update_project(project_id):
     if not store.get_item("projects", project_id):
-        return jsonify(error="No such project."), 404
+        return jsonify(error="找不到此項目。"), 404
     body = request.get_json(force=True) or {}
     changes = {k: str(body[k])[:2000] for k in PROJECT_FIELDS if k in body}
     return jsonify(project=store.save_item("projects", project_id, {**changes, "updated_at": utcnow_iso()}))
@@ -547,7 +547,7 @@ def api_delete_project(project_id):
 @app.patch("/api/systems/<system_id>")
 def api_update_system(system_id):
     if not store.get_item("systems", system_id):
-        return jsonify(error="No such system."), 404
+        return jsonify(error="找不到此系統。"), 404
     body = request.get_json(force=True) or {}
     changes = {}
     if body.get("status") in ("connected", "available", "needed", "requested", "not_used"):
@@ -562,17 +562,17 @@ def api_update_system(system_id):
 @app.get("/api/talk/<partner>")
 def api_talk_history(partner):
     if partner not in PARTNERS:
-        return jsonify(error="No such partner."), 404
+        return jsonify(error="找不到此 AI 夥伴。"), 404
     return jsonify(turns=store.get_talk(partner))
 
 
 @app.post("/api/talk/<partner>")
 def api_talk(partner):
     if partner not in PARTNERS:
-        return jsonify(error="No such partner."), 404
+        return jsonify(error="找不到此 AI 夥伴。"), 404
     message = str((request.get_json(force=True) or {}).get("message", "")).strip()
     if not message:
-        return jsonify(error="Say something first."), 400
+        return jsonify(error="請先說點甚麼。"), 400
     try:
         reply = talk_service().ask(partner, message)
     except Exception as exc:  # noqa: BLE001 - shown in the conversation
@@ -586,7 +586,7 @@ def api_talk(partner):
 @app.delete("/api/talk/<partner>")
 def api_talk_clear(partner):
     if partner not in PARTNERS:
-        return jsonify(error="No such partner."), 404
+        return jsonify(error="找不到此 AI 夥伴。"), 404
     store.clear_talk(partner)
     return jsonify(ok=True)
 
@@ -616,11 +616,11 @@ def api_connect(integration_id):
     """Save a pasted key straight into Secret Manager, then try the system with it. Values are never echoed."""
     integration = integrations.BY_ID.get(integration_id)
     if not integration or integration.kind != "paste":
-        return jsonify(error="That system doesn't take a pasted key."), 404
+        return jsonify(error="此系統不接受貼上的金鑰。"), 404
     values = (request.get_json(force=True) or {}).get("values") or {}
     provided = {name: str(values.get(name, "")).strip() for name in integration.paste_names()}
     if not all(provided.values()):
-        return jsonify(error="Fill in every field."), 400
+        return jsonify(error="請填寫所有欄位。"), 400
     try:
         for name, value in provided.items():
             secret_store.put(name, value)
@@ -643,7 +643,7 @@ def api_speak():
     body = request.get_json(force=True) or {}
     partner = body.get("partner", "assistant")
     if partner not in PARTNERS:
-        return jsonify(error="No such partner."), 404
+        return jsonify(error="找不到此 AI 夥伴。"), 404
     if _speaker is None:
         import speech
 
@@ -756,7 +756,7 @@ except ImportError:  # the voice route needs flask-sock; everything else works w
 
 def do_run(trigger):
     if not store.acquire_run_lock():
-        return {"error": "A run is already in progress."}, 409
+        return {"error": "已有一次執行正在進行。"}, 409
     started = utcnow_iso()
     progress = assistant.Progress(store, trigger)
     try:
