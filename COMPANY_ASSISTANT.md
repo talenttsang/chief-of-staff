@@ -214,10 +214,12 @@ Guards in the service itself, whatever the model asks:
 - no typing into password or payment-card fields; no downloads, file pickers or device permissions; dialogs
   are dismissed (and reported).
 
-Sites that challenge data-centre visitors stay blocked; it doesn't disguise itself or solve challenges. Working
-alone on a task it may look and click but not type, press keys or pick options. The models are told never to
-log in, enter personal or payment details, place orders or send a form without your OK; that rule is an
-instruction, not a technical block.
+Sites that challenge data-centre visitors stay blocked; it doesn't disguise itself or solve challenges. It may
+type and fill in forms, also working alone on a task, so it can test HelperXpress's flows end to end with its
+test accounts and made-up data. The models are told to log in only with `sign_in`, never to enter real people's
+details, card or bank details or pay (HelperXpress's Stripe is live: it stops at the payment step), and on other
+sites never to place orders or send a form without your OK. That rule is an instruction; the technical blocks are
+the ones listed above (no typing into password or payment-card fields).
 
 Deploy:
 

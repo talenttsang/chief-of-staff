@@ -60,7 +60,6 @@ class BrowserToolTests(unittest.TestCase):
             self.assertIn("error", ts.call("browser", {"action": "sign_in", "account": "other"}))
             self.assertIn("isn't set up", self.toolset(secrets=MemorySecrets()).call(
                 "browser", {"action": "sign_in", "account": "app-helper"})["error"])
-            self.assertIn("not type", ts.call("browser", {"action": "type", "target": "#key", "text": "x"})["error"])
 
     def test_open_attaches_the_screenshot_and_reuses_the_tab(self):
         ts = self.toolset()
@@ -75,13 +74,13 @@ class BrowserToolTests(unittest.TestCase):
         self.assertNotIn("session", self.calls[0])
         self.assertEqual(self.calls[1]["session"], "s1")  # same tab
 
-    def test_working_alone_it_looks_and_clicks_but_does_not_type(self):
+    def test_working_alone_it_can_fill_in_forms(self):
         ts = self.toolset(may_change=False)
         self.assertNotIn("error", ts.call("browser", {"action": "open", "url": "https://example.com"}))
-        self.assertNotIn("error", ts.call("browser", {"action": "click", "x": 10, "y": 20}))
         for action in ("type", "press", "select"):
-            self.assertIn("error", ts.call("browser", {"action": action, "target": "Search", "text": "wig"}))
-        self.assertEqual(len(self.calls), 2)
+            self.assertNotIn("error", ts.call("browser", {"action": action, "target": "Name", "text": "Test Helper"}))
+        self.assertEqual([c["action"] for c in self.calls], ["open", "type", "press", "select"])
+        self.assertIn("never enter card or bank details", tools.SPECS[[n for n, _, _ in tools.SPECS].index("browser")][1])
 
     def test_a_live_call_gets_a_description_instead(self):
         import partner_gemini
