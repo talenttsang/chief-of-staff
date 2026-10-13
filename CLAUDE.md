@@ -9,6 +9,7 @@
 ## Git
 
 - Whenever you complete a piece of work (new feature, fix, config change), commit it — don't leave finished work uncommitted. Then push to GitHub.
+- Then deploy it (see Deploying below) and check it: `/health` returns 200, the sign-in page loads, and the new revision logs no errors. Don't wait to be asked.
 - If the push fails because this machine's credentials (`talenttsang`) lack write access to the repo, still commit locally and tell the user the push is pending.
 - Never commit secrets: tokens, webhook URLs, service-account keys, `.env` files. Config with secrets goes in env vars / repo secrets, not the repo.
 
