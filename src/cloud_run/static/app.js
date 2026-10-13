@@ -830,7 +830,8 @@ function renderBrowser() {
     const link = safeUrl(v.url);
     return el("div", { class: `screen${v.device === "mobile" ? " phone" : ""}`, "data-id": v.id, "data-at": v.at },
       el("div", { class: "top" },
-        el("b", {}, partnerInfo(v.caller).label || v.caller),
+        el("b", {}, partnerInfo((v.caller || "").split(" ")[0]).label || v.caller),
+        /\((task|voice)\)/.test(v.caller || "") ? el("span", {}, /task/.test(v.caller) ? "· working a task" : "· on a call") : null,
         isLiveView(v) ? el("span", { class: "live" }, "live") : el("span", {}, v.closed ? "closed" : "idle"),
         el("span", {}, `· ${v.action}`),
         el("span", { class: "when" }, ago(v.at)),
