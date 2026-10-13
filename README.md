@@ -88,7 +88,7 @@ Live values are set on the Cloud Run service.
 | `SECRETS_PROJECT` | (unset) | `GCP_PROJECT` |
 | `FIRESTORE_DATABASE` | `chat-assistant` | `(default)` |
 | `DATABASES` | `helperxpress=SUPABASE_DB_URL` | none (`name=SECRET` pairs; the secret holds a postgres:// URL) |
-| `INTEGRATIONS` | `github` | every connector in `integrations.py` |
+| `INTEGRATIONS` | `github;notion;figma;airtable;firecrawl;gmail;google_drive;google_sheets;ga4_admin;ga4_data;search_console;shared_drive;shared_calendar` | every connector in `integrations.py` |
 | `CODE_REPOS` | `talenttsang/chief-of-staff,Talent-Solutions-Limited/helperxpress` | none (no `commit_code` tool) |
 | `BROWSER_URL` | the `web-browser` service | none (no browser tool) |
 | `PUBLIC_URL` | the service's URL | the request's host |

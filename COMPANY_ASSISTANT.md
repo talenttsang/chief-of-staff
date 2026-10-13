@@ -148,14 +148,13 @@ offers only those named in `INTEGRATIONS`. The live app offers:
 |---|---|
 | GitHub | The `GITHUB_TOKEN` secret: repositories, issues, pull requests, CI; and code changes with `commit_code` |
 | HelperXpress database | `query_database` on the Postgres URL in `SUPABASE_DB_URL` (`DATABASES=helperxpress=SUPABASE_DB_URL`) |
-| Gmail, Calendar, Drive | Connect Google, as helperxpresss@gmail.com |
+| Gmail, Calendar, Drive, Sheets, Google Analytics, Search Console | Connect Google, as helperxpresss@gmail.com |
 | Drive folders and calendars shared with Talent Solutions AI | Shared with chat-assistant@helperexpress-hk.iam.gserviceaccount.com; nothing to connect |
+| Notion, Figma, Airtable, web research (Firecrawl) | Their key in `helperexpress-hk`'s Secret Manager (`NOTION_API_KEY`, `FIGMA_TOKEN`, `AIRTABLE_COMPANY_TOKEN`, `FIRECRAWL_API`); until it's there, the Access tab says the app can't read it |
 
-`integrations.py` also has general connectors that are off for now: Airtable, Notion, Figma, Google Analytics
-and Search Console, Google Sheets, web research (Firecrawl) and SEO research (DataForSEO). Add an id to
-`INTEGRATIONS` to offer one; its key must be in `helperexpress-hk`'s Secret Manager. The Superhairpieces
-connectors (BigCommerce, Amazon, Walmart, SkuVault, Trustpilot, Stamped, Omnisend, TeamDesk, Merchant Center)
-were removed on 2026-10-13.
+SEO research (DataForSEO) is in `integrations.py` but not offered; add `dataforseo` to `INTEGRATIONS` to offer
+it. The Superhairpieces connectors (BigCommerce, Amazon, Walmart, SkuVault, Trustpilot, Stamped, Omnisend,
+TeamDesk, Merchant Center) were removed on 2026-10-13.
 
 The models read pages, emails and a conversation many people share, so the design
 assumes someone may try to talk them into misusing a key:

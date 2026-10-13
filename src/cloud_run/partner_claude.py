@@ -61,7 +61,7 @@ def _client(backend, secrets):
         if backend == "anthropic":
             key = _key(secrets)
             if not key:
-                raise _Unusable(f"Claude API: there's no readable {API_KEY_SECRET} secret.")
+                raise _Unusable(f"Claude API：無法讀取 {API_KEY_SECRET} 金鑰。")
             _clients[backend] = anthropic.Anthropic(api_key=key)
         else:
             _clients[backend] = anthropic.AnthropicVertex(
@@ -77,18 +77,17 @@ def _why_unusable(backend, exc):
     text = str(exc)
     if backend == "vertex":
         if isinstance(exc, anthropic.RateLimitError) and "Quota exceeded" in text:
-            return ("Vertex AI: Google Cloud hasn't given this project Claude quota (request an increase for "
-                    "global_online_prediction_requests_per_base_model, base model anthropic-claude-opus, "
-                    "under IAM & Admin > Quotas).")
+            return ("Vertex AI：Google Cloud 未有給這個項目 Claude 配額（請在 IAM & Admin > Quotas 為 "
+                    "global_online_prediction_requests_per_base_model、base model anthropic-claude-opus 申請增加）。")
         if isinstance(exc, anthropic.NotFoundError):
-            return f"Vertex AI: {CLAUDE_MODEL} isn't enabled in Model Garden for this project."
+            return f"Vertex AI：這個項目未在 Model Garden 啟用 {CLAUDE_MODEL}。"
         if isinstance(exc, anthropic.PermissionDeniedError):
-            return "Vertex AI: the app's service account isn't allowed to use it."
+            return "Vertex AI：應用程式的服務帳戶無權使用。"
         return None
     if isinstance(exc, anthropic.BadRequestError) and "credit balance" in text:
-        return "Claude API: the Anthropic account behind ANTHROPIC_API_KEY is out of credit (Plans & Billing)."
+        return "Claude API：ANTHROPIC_API_KEY 的 Anthropic 帳戶已用完額度（Plans & Billing）。"
     if isinstance(exc, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
-        return "Claude API: ANTHROPIC_API_KEY was rejected."
+        return "Claude API：ANTHROPIC_API_KEY 被拒絕。"
     return None
 
 

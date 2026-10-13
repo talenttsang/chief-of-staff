@@ -1014,8 +1014,8 @@ class ClaudeBackendTests(unittest.TestCase):
                                  self.error(anthropic.BadRequestError, 400, "Your credit balance is too low"))
         with self.assertRaises(RuntimeError) as ctx:
             claude.ping(MemorySecrets())
-        self.assertIn("quota", str(ctx.exception))
-        self.assertIn("out of credit", str(ctx.exception))
+        self.assertIn("配額", str(ctx.exception))
+        self.assertIn("已用完額度", str(ctx.exception))
 
     def test_an_ordinary_request_error_is_not_hidden(self):
         import anthropic
