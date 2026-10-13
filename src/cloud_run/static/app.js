@@ -851,13 +851,67 @@ async function pollBrowser() {
   browserTimer = setTimeout(pollBrowser, watching ? 2000 : 20000);  // every 2 s while watched; else just the badge
 }
 
+// -- Progress: the AI's work log, step by step ---------------------------------------------------
+const STEP_LABEL = {
+  task_started: "開始處理任務", task_done: "完成任務", task_paused: "暫停任務（下次再繼續）", task_failed: "任務出錯",
+  browser: "瀏覽器", web_search: "搜尋網頁", read_webpage: "閱讀網頁", call_api: "查詢系統", query_database: "查詢資料庫",
+  commit_code: "提交程式碼", start_task: "交給自己處理", create_task: "新增任務", update_task: "更新任務",
+  delete_task: "刪除任務", list_tasks: "查看工作板", save_project: "儲存項目", delete_project: "刪除項目",
+  record_fact: "記錄資料", delete_fact: "刪除資料", ask_owner: "提出問題", answer_question: "記錄答案",
+  delete_question: "刪除問題", list_questions: "查看問題", search_knowledge: "搜尋知識庫", company_overview: "查看公司概覽",
+  list_projects: "查看項目", list_systems: "查看系統", request_access: "要求權限", update_system: "更新系統",
+  delete_system: "刪除系統", list_integrations: "查看已連接系統", list_calendar: "查看日曆", consult_partner: "請教 AI 夥伴",
+  assistant_status: "查看狀態", set_autopilot: "設定自動執行",
+};
+const MARKS = new Set(["task_started", "task_done", "task_paused", "task_failed"]);
+let stepsData = { steps: [], working: [] };
+
+function stepWho(caller) {
+  const [name, how] = [(caller || "").split(" ")[0], (caller || "").match(/\((task|voice)\)/)];
+  const label = partnerInfo(name).label || caller || "";
+  return how ? `${label} · ${how[1] === "task" ? "處理任務中" : "通話中"}` : label;
+}
+
+function renderSteps() {
+  const { steps, working } = stepsData;
+  $("stepsLive").hidden = !working.length;
+  const tasks = new Map((state?.tasks || []).map((t) => [t.id, t.title]));
+  $("working").replaceChildren(...(working.length ? [el("div", { class: "working" },
+    ...working.map((w) => el("div", { class: "row" }, el("span", { class: "live" }, "工作中"),
+      el("b", {}, w.title), el("span", { class: "detail" }, `· 由 ${ago(w.since)} 開始`))))] : []));
+  if (!steps.length) {
+    $("steps").replaceChildren(el("div", { class: "empty" }, "尚未有工作紀錄。把任務交給 Talent Solutions AI，就會在這裡看到每一步。"));
+    return;
+  }
+  $("steps").replaceChildren(...steps.map((s) => {
+    const task = !MARKS.has(s.tool) && s.task_id && tasks.get(s.task_id);
+    return el("div", { class: `step${s.ok === false ? " bad" : ""}${MARKS.has(s.tool) ? " mark" : ""}` },
+      el("span", { class: "when", title: new Date(s.at).toLocaleString("zh-HK") },
+        new Date(s.at).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })),
+      el("div", {},
+        el("div", { class: "what" }, el("b", {}, STEP_LABEL[s.tool] || s.tool),
+          s.detail ? el("span", { class: "detail" }, ` · ${s.detail}`) : null),
+        el("div", { class: "who" }, stepWho(s.caller), task ? ` · 任務：${task}` : ""),
+        s.error ? el("div", { class: "err" }, s.error) : null));
+  }));
+}
+
+let stepsTimer = null;
+async function pollSteps() {
+  clearTimeout(stepsTimer);
+  try { stepsData = await api("GET", "/api/steps"); renderSteps(); } catch { /* next time */ }
+  const watching = !$("view-steps").hidden && document.visibilityState === "visible";
+  stepsTimer = setTimeout(pollSteps, watching ? 3000 : 20000);  // every 3 s while watched; else just the badge
+}
+
 // -- tabs ---------------------------------------------------------------------------------
-const TABS = ["board", "projects", "questions", "access", "browser", "activity"];  // the chat isn't a tab: it floats over all of them
+const TABS = ["board", "projects", "questions", "access", "steps", "browser", "activity"];  // the chat isn't a tab: it floats over all of them
 function switchTab(name) {
   if (!TABS.includes(name)) name = "board";  // e.g. "talk", remembered from before the chat window
   for (const t of document.querySelectorAll(".tab")) t.classList.toggle("active", t.dataset.tab === name);
   for (const v of TABS) $(`view-${v}`).hidden = v !== name;
   if (name === "browser") pollBrowser();
+  if (name === "steps") pollSteps();
   try { localStorage.setItem("tab", name); } catch { /* storage unavailable */ }
 }
 for (const tab of document.querySelectorAll(".tab")) tab.onclick = () => switchTab(tab.dataset.tab);
@@ -871,6 +925,7 @@ window.companyAssistant = { el, toast, api, renderThread, turnNode, loadTalk, re
   switchTab(tab);
   try { await load(); afterConnectRedirect(); await loadTalk(); await pollProgress(); } catch (e) { $("lastrun").textContent = e.message; }
   if (!browserTimer) pollBrowser();
+  if (!stepsTimer) pollSteps();
 })();
 // Every minute: notice an hourly run starting, and refresh unless a dialog is open or a reply is pending.
 setInterval(() => {

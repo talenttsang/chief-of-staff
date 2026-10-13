@@ -23,6 +23,9 @@ import knowledge
 from store import utcnow_iso
 
 MAX_RESULT_CHARS = 12000
+# The arguments a work-log line shows (in this order), when a call has them.
+STEP_ARGS = ("action", "account", "url", "query", "title", "name", "status", "question", "method", "path", "system",
+             "partner", "database", "sql", "text")
 # An "answer" that only sets a question aside; such questions are deleted instead of shown as answered.
 NOT_AN_ANSWER = re.compile(r"^\W*(dismiss(ed)?|skip(ped)?|not relevant|irrelevant|n/?a)\b", re.I)
 # The browser service (src/browser), called with Talent Solutions AI's own identity. Empty: the browser tool isn't offered.
@@ -85,6 +88,11 @@ SPECS = [
     ("list_tasks", "List board tasks. Filter by status, by 'mine' (owner's own tasks) or by a text query.",
      _obj({"status": _S, "mine": _B, "query": _S})),
     ("create_task", "Add a task to the board.", _obj(_TASK_FIELDS, ["title"])),
+    ("start_task", "Hand a board task to yourself and start working on it now, in the background. The work goes on "
+     "after this conversation or call ends; each step shows live on the Progress tab (工作進度) and the report "
+     "goes on the task and into the chat. Use it for anything longer than a quick look (testing a flow in the "
+     "browser, research, a code change), and before ever saying you'll keep working on something.",
+     _obj({"task_id": _S}, ["task_id"])),
     ("update_task", "Change a board task.", _obj({"task_id": _S, **_TASK_FIELDS}, ["task_id"])),
     ("delete_task", "Remove a task from the board entirely (duplicates, mistakes, things that no longer apply). "
      "For finished work set status done instead, so it stays on record.", _obj({"task_id": _S}, ["task_id"])),
@@ -177,8 +185,10 @@ class Toolset:
     """Tool specs plus their implementations, bound to one conversation."""
 
     def __init__(self, store, google=None, caller="assistant", consult=None, exclude=(), secrets=None,
-                 may_change=True, images=True):
+                 may_change=True, images=True, starter=None):
         self.store = store
+        self.starter = starter  # callable(task_id): works a task in the background (main.start_task_work)
+        self.task_id = ""       # the board task being worked, for the work log
         self.google = google
         self.secrets = secrets  # Secret Manager, for company systems; values never leave the server
         self.may_change = may_change  # False when no owner is in the conversation to agree to a change
@@ -192,7 +202,8 @@ class Toolset:
         self._names = [n for n, _, _ in SPECS if n not in exclude and not (n == "consult_partner" and not consult)
                        and not (n == "browser" and not BROWSER_URL)
                        and not (n == "query_database" and not databases.configured())
-                       and not (n == "commit_code" and not github_code.CODE_REPOS)]
+                       and not (n == "commit_code" and not github_code.CODE_REPOS)
+                       and not (n == "start_task" and not starter)]
 
     def specs(self):
         return [{"name": n, "description": d, "parameters": p} for n, d, p in SPECS if n in self._names]
@@ -213,10 +224,24 @@ class Toolset:
             self._images += result.pop("_images")
         self.log.append({"tool": name, "args": {k: (v if len(str(v)) < 200 else str(v)[:200] + "…") for k, v in args.items()},
                          "ok": "error" not in result, "ms": int((time.time() - started) * 1000)})
+        self._step(name, args, result)
         text = json.dumps(result, ensure_ascii=False, default=str)
         if len(text) > MAX_RESULT_CHARS:
             result = {"truncated": True, "result": text[:MAX_RESULT_CHARS]}
         return result
+
+    def _step(self, name, args, result):
+        """One line in the work log (the Progress tab), so people see the AI working even when no one is talking
+        to it. Only a short summary of the arguments: never file contents or long text."""
+        try:
+            detail = " · ".join(str(args[k])[:120] for k in STEP_ARGS if args.get(k) not in (None, "", [], {}))
+            if name == "commit_code":
+                detail = f"{args.get('repo', '')} · {args.get('message', '')}"[:200]
+            error = str(result.get("error") or "")[:200] if isinstance(result, dict) else ""
+            self.store.add_step({"caller": self.caller, "tool": name, "detail": detail[:240], "ok": not error,
+                                 "error": error, "task_id": self.task_id})
+        except Exception as exc:  # noqa: BLE001 - the log is a courtesy; the call already happened
+            print(f"step not logged: {exc!r}")
 
     def take_images(self):
         """Images the last calls produced ([{"mime", "data" (base64)}]), for the partner to show its model."""
@@ -316,6 +341,18 @@ class Toolset:
                 "status": "todo", "project_id": "", **{k: v for k, v in fields.items() if k in _TASK_FIELDS},
                 "origin": "assistant", "user_edited": False, "created_at": now, "updated_at": now}
         return {"task": self.store.save_task(pysecrets.token_hex(10), task)}
+
+    def _t_start_task(self, task_id):
+        task = self.store.get_task(task_id)
+        if not task:
+            return {"error": "no such task"}
+        if task.get("status") == "done":
+            return {"error": "that task is already done; reopen it (update_task status todo) first"}
+        self.store.save_task(task_id, {"owner": "Assistant", "owner_is_me": False, "updated_at": utcnow_iso()})
+        self.starter(task_id)
+        return {"started": True, "title": task.get("title", ""),
+                "note": "Working in the background now; it continues after this conversation ends. Tell them they "
+                        "can watch it on the Progress tab (工作進度)."}
 
     def _t_update_task(self, task_id, **fields):
         if not self.store.get_task(task_id):

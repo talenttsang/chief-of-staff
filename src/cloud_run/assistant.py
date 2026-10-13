@@ -37,7 +37,7 @@ class Progress:
     def __init__(self, store, trigger="manual"):
         self.store = store
         self._lock = threading.Lock()
-        self.state = {"running": True, "trigger": trigger, "phase": "Starting", "started_at": utcnow_iso()}
+        self.state = {"running": True, "trigger": trigger, "phase": "開始", "started_at": utcnow_iso()}
         self._flush()
 
     def _flush(self):
@@ -50,7 +50,7 @@ class Progress:
 
     def finish(self, error=""):
         with self._lock:
-            self.state.update(running=False, phase="Failed" if error else "Done", finished_at=utcnow_iso(),
+            self.state.update(running=False, phase="失敗" if error else "完成", finished_at=utcnow_iso(),
                               error=error[:500])
             self._flush()
 

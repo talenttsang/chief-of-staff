@@ -80,6 +80,16 @@
     .screen img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
     .screen.phone img { max-width: min(390px, 100%); }
     .screen .err { color: var(--bad, #b42318); font-size: 13px; margin-top: 6px; }
+    .working { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; }
+    .working .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 3px 0; }
+    .steps { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    .step { display: grid; grid-template-columns: 70px 1fr; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .step:last-child { border-bottom: 0; }
+    .step .when { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .step .what b { font-weight: 600; }
+    .step .who, .step .detail { color: var(--muted); overflow-wrap: anywhere; }
+    .step.bad .what b, .step .err { color: var(--bad, #b42318); }
+    .step.mark { background: var(--panel-2); }
     .live { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--good, #067647); font-weight: 600; }
     .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: blink 1.2s infinite; }
     @keyframes blink { 50% { opacity: .25; } }
@@ -202,6 +212,7 @@
     <button class="tab" data-tab="projects">項目 <span class="count" id="projectCount">0</span></button>
     <button class="tab" data-tab="questions">問題 <span class="count" id="questionCount">0</span></button>
     <button class="tab" data-tab="access">系統權限 <span class="count" id="accessCount">0</span></button>
+    <button class="tab" data-tab="steps">工作進度 <span class="live" id="stepsLive" hidden>工作中</span></button>
     <button class="tab" data-tab="browser">瀏覽器 <span class="live" id="browserLive" hidden>即時</span></button>
     <button class="tab" data-tab="activity">活動紀錄</button>
   </nav>
@@ -258,6 +269,12 @@
       <button class="btn" id="checkSystems">檢查連接</button>
       <span class="hint">「全部連接」會以項目擁有人身份向 Google 取得一次許可，讓應用程式讀取所需的每條已儲存金鑰，並測試每個系統。金鑰只留在伺服器，AI 永遠看不到。</span></p>
     <div id="systems"></div>
+  </section>
+
+  <section id="view-steps" hidden>
+    <p class="hint">Talent Solutions AI 每一步的工作紀錄，即時更新。結束對話或通話後，交給它的任務仍會繼續，可以在這裡看到進度。</p>
+    <div id="working"></div>
+    <div class="steps" id="steps"></div>
   </section>
 
   <section id="view-browser" hidden>

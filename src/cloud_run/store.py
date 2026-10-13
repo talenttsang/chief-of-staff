@@ -11,6 +11,7 @@ Firestore layout (database FIRESTORE_DATABASE, collections prefixed chat_assista
   chat_assistant_tasks/{id}    board cards
   chat_assistant_actions/{id}  changes made in systems and databases
   chat_assistant_runs/{id}     one summary per hourly run
+  chat_assistant_steps/{id}    the AI's work log, step by step (the Progress tab); a week is kept
 """
 
 import copy
@@ -229,6 +230,20 @@ class MemoryStore:
     def list_runs(self, limit=20):
         return sorted(self._list("chat_assistant_runs"), key=lambda r: r.get("started_at", ""), reverse=True)[:limit]
 
+    # -- the work log: every step the AI takes, so people can see it working ------------------------------
+    def add_step(self, step):
+        at = step.get("at") or utcnow_iso()
+        self._set("chat_assistant_steps", f"{at.replace(':', '').replace('.', '')}-{pysecrets.token_hex(3)}",
+                  dict(step, at=at))
+
+    def list_steps(self, limit=150):
+        return sorted(self._list("chat_assistant_steps"), key=lambda s: s.get("at", ""), reverse=True)[:limit]
+
+    def prune_steps(self, before):
+        for step in self._list("chat_assistant_steps"):
+            if step.get("at", "") < before:
+                self._delete("chat_assistant_steps", step["id"])
+
 
 class FirestoreStore(MemoryStore):
     """Same API as MemoryStore; the primitives go to Firestore instead of a dict."""
@@ -261,6 +276,16 @@ class FirestoreStore(MemoryStore):
         q = (self._db.collection("chat_assistant_runs")
              .order_by("started_at", direction=self._fs.Query.DESCENDING).limit(limit))
         return [dict(s.to_dict(), id=s.id) for s in q.stream()]
+
+    def list_steps(self, limit=150):
+        q = (self._db.collection("chat_assistant_steps")
+             .order_by("at", direction=self._fs.Query.DESCENDING).limit(limit))
+        return [dict(s.to_dict(), id=s.id) for s in q.stream()]
+
+    def prune_steps(self, before):
+        q = self._db.collection("chat_assistant_steps").where(filter=self._fs.FieldFilter("at", "<", before)).limit(400)
+        for snap in q.stream():
+            snap.reference.delete()
 
     def session_key(self):
         # create() fails if the doc exists, so instances starting together agree on one key.

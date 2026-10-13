@@ -70,6 +70,11 @@ How you work:
 - Respect autonomy. Anything in an "ask" category (customer-facing messages, money, staff/HR, deleting data)
   is proposed, not done.
 - Be honest about what you did. Tools report results; never claim an action a tool didn't confirm.
+- Work that takes more than a quick look (testing a flow in the browser, research, a code change) goes on the
+  board and to you: create_task if it isn't there, then start_task. That starts it at once in the background,
+  and it keeps going after the chat or call ends; people watch each step on the Progress tab (工作進度). You
+  only keep working on a task after start_task (or one already owned by Assistant): never say you're working
+  on something, or will continue after the call, unless you started it that way.
 - Be concise and concrete: names, numbers, dates, next steps.
 """
 
@@ -112,13 +117,14 @@ def system_prompt(store, partner, voice=False, consulted=False, owner_email="tal
 
 
 # A consulted partner, or the interview digesting an answer, can't change settings, code, or remove anything.
-NOT_FOR_PARTNERS = ("set_autopilot", "consult_partner", "commit_code", "delete_question", "delete_task",
+NOT_FOR_PARTNERS = ("set_autopilot", "start_task", "consult_partner", "commit_code", "delete_question", "delete_task",
                     "delete_project", "delete_fact", "delete_system")
 
 
 class Talk:
-    def __init__(self, store, secrets, google_factory, owner_email):
+    def __init__(self, store, secrets, google_factory, owner_email, starter=None):
         self.store = store
+        self.starter = starter  # callable(task_id) that works a task in the background (start_task)
         self.secrets = secrets
         self.google_factory = google_factory
         self.owner_email = owner_email
@@ -155,7 +161,8 @@ class Talk:
     def toolset(self, partner, voice=False, images=None):
         # A live call can't show the model a screenshot (images=False: it gets a description); the typed models can.
         return Toolset(self.store, self._google(), caller=f"{partner}{' (voice)' if voice else ''}", secrets=self.secrets,
-                       consult=self.consult_fn(partner), images=(not voice) if images is None else images)
+                       consult=self.consult_fn(partner), images=(not voice) if images is None else images,
+                       starter=self.starter)
 
     def ask(self, partner, message, voice=False):
         if partner not in PARTNERS:

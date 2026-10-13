@@ -826,6 +826,37 @@ class ResearchAndWorkTests(unittest.TestCase):
             worked = worker.work_due(service, self.store, limit=1)
         self.assertEqual(len(worked), 1)
 
+    def test_working_a_task_leaves_a_step_by_step_log(self):
+        import worker
+
+        self.store.save_task("t1", {"title": "測試外傭註冊", "status": "todo", "owner": "Assistant"})
+        fake = FakePartner("完成。", tool=("update_task", {"task_id": "t1", "status": "done"}))
+        with mock.patch.dict(talk.PARTNERS, {"assistant": fake}):
+            worker.work_on(talk.Talk(self.store, self.secrets, lambda: None, "x@y"), self.store, "t1")
+        steps = list(reversed(self.store.list_steps()))
+        self.assertEqual([s["tool"] for s in steps], ["task_started", "update_task", "task_done"])
+        self.assertEqual({s["task_id"] for s in steps}, {"t1"})
+        self.assertEqual(steps[1]["caller"], "assistant (task)")
+        self.assertIn("done", steps[1]["detail"])
+
+    def test_start_task_hands_the_task_over_and_starts_it(self):
+        started = []
+        self.store.save_task("t2", {"title": "E2E 測試", "status": "todo", "owner": ""})
+        tools = Toolset(self.store, None, caller="assistant (voice)", starter=started.append)
+        result = tools.call("start_task", {"task_id": "t2"})
+        self.assertTrue(result["started"], result)
+        self.assertEqual(started, ["t2"])
+        self.assertEqual(self.store.get_task("t2")["owner"], "Assistant")
+        self.assertIn("error", tools.call("start_task", {"task_id": "nope"}))
+        self.assertNotIn("start_task", Toolset(self.store, None)._names)  # no starter, no tool
+        self.assertEqual(self.store.list_steps()[0]["tool"], "start_task")
+
+    def test_old_steps_are_pruned(self):
+        self.store.add_step({"tool": "browser", "at": "2026-01-01T00:00:00+00:00"})
+        self.store.add_step({"tool": "browser"})
+        self.store.prune_steps("2026-06-01T00:00:00+00:00")
+        self.assertEqual(len(self.store.list_steps()), 1)
+
     def test_partners_are_told_to_use_their_access(self):
         prompt = talk.system_prompt(self.store, "chatgpt")
         self.assertIn("live access to the company's systems and the web", prompt)

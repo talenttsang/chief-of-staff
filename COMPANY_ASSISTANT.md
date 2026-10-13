@@ -116,6 +116,16 @@ can't change data (it prepares the exact change and asks for your OK). When a ta
 is finished it marks it done. Its report appears on the task (and a 🤖 report badge
 on the card) and in Talent Solutions AI's chat conversation.
 
+In a chat or on a call, Talent Solutions AI hands longer work to itself with `start_task`: it becomes the
+task's owner and the work starts at once in the background, so it goes on after the chat or call ends. The app
+calls its own `POST /work/<id>` (with the run token) rather than starting a thread, because Cloud Run only gives
+a container CPU while it serves a request. If that work is cut off, the hourly run picks the task up again.
+
+**工作進度 (Progress tab)** shows every step as it happens: each tool call (a short summary, never file
+contents), and each task started, finished, paused or failed, with who did it (typed, on a call, or working a
+task). It refreshes every 3 seconds while open, and the tab shows 工作中 whenever a task is being worked.
+Steps are kept for a week (`chat_assistant_steps`, pruned by the hourly run).
+
 ## Changing code and deploying, on its own
 
 The owner chose full autonomy for code. `commit_code` makes one commit straight to `main` of a repository in

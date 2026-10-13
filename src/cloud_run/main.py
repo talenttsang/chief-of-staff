@@ -13,6 +13,8 @@ Routes
   PATCH /api/settings
   POST /api/run          run now (from the UI)
   POST /run              hourly run (Cloud Scheduler, X-Run-Token header)
+  POST /work/<id>        work one task in the background (the app calling itself for start_task, X-Run-Token)
+  GET  /api/steps        the AI's work log, step by step (the Progress tab)
 
 Sign-in is one shared password, kept in Secret Manager (chat-assistant-password); there is no Google
 sign-in. A browser stays signed in for SESSION_DAYS after its last visit, until the password changes.
@@ -28,8 +30,9 @@ import json
 import re
 import os
 import secrets as pysecrets
+import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, redirect, render_template, request, session
@@ -442,7 +445,29 @@ def api_settings():
 # -- knowledge base, interview, access ------------------------------------------------
 
 def talk_service():
-    return Talk(store, secret_store, app.config["MAKE_GOOGLE"], OWNER_EMAIL)
+    return Talk(store, secret_store, app.config["MAKE_GOOGLE"], OWNER_EMAIL, starter=start_task_work)
+
+
+def start_task_work(task_id):
+    """Work a task in the background, so it goes on after the chat or call that started it.
+
+    The app asks itself through Cloud Run (POST /work/<id>) instead of starting a thread: Cloud Run gives a
+    container CPU only while it's serving a request, so a thread left over after a call ends would stall.
+    Without PUBLIC_URL (local runs) it's a thread.
+    """
+    import requests
+
+    def call():
+        try:
+            if PUBLIC_URL:
+                requests.post(f"{PUBLIC_URL}/work/{task_id}", timeout=(10, 3600),
+                              headers={"X-Run-Token": secret_store.get(RUN_TOKEN_SECRET_ID) or ""})
+            else:
+                worker.work_on(talk_service(), store, task_id)
+        except Exception as exc:  # noqa: BLE001 - the task keeps its error, and the hourly run picks it up again
+            print(f"background work[{task_id}]: {exc!r}")
+
+    threading.Thread(target=call, daemon=True).start()
 
 
 @app.get("/api/knowledge")
@@ -764,7 +789,7 @@ def do_run(trigger):
         google = app.config["MAKE_GOOGLE"]()  # None until Connect Google: the Google tools wait, nothing else does
         summary = assistant.empty_summary()
         summary["trigger"] = trigger
-        progress.phase("Working on the assistant's own tasks")
+        progress.phase("處理 Talent Solutions AI 自己的任務")
         try:
             summary["tasks_worked"] = worker.work_due(talk_service(), store)
         except Exception as exc:  # noqa: BLE001 - the connection check below still runs
@@ -775,6 +800,10 @@ def do_run(trigger):
             summary["systems_connected"] = sum(1 for r in checked.values() if r["ok"])
         except Exception as exc:  # noqa: BLE001
             summary["errors"].append({"space": "(connections)", "error": str(exc)[:300]})
+        try:
+            store.prune_steps((datetime.now(timezone.utc) - timedelta(days=7)).isoformat())
+        except Exception as exc:  # noqa: BLE001 - an old log is no reason to fail the run
+            print(f"steps not pruned: {exc!r}")
         summary["finished_at"] = utcnow_iso()
         store.add_run(summary)
         store.set_status({"last_run": summary, "connection_error": ""})
@@ -800,6 +829,31 @@ def do_run(trigger):
 def api_browser():
     """The AI's browser screen, as each partner last left it; the Browser tab polls it while open."""
     return jsonify(views=store.list_browser_views())
+
+
+@app.get("/api/steps")
+def api_steps():
+    """The work log and what the AI is working on now; the Progress tab polls it."""
+    now = datetime.now(timezone.utc)
+    working = [{"id": t["id"], "title": t.get("title", ""), "since": t["working_since"]}
+               for t in store.list_tasks() if worker._busy(t, now)]
+    return jsonify(steps=store.list_steps(150), working=working)
+
+
+@app.post("/work/<task_id>")
+def background_work(task_id):
+    expected = secret_store.get(RUN_TOKEN_SECRET_ID) or ""
+    if not expected or not hmac.compare_digest(request.headers.get("X-Run-Token", ""), expected):
+        return jsonify(error="forbidden"), 403
+    if not store.get_task(task_id):
+        return jsonify(error="no such task"), 404
+    try:
+        outcome = worker.work_on(talk_service(), store, task_id)
+    except worker.Busy as exc:
+        return jsonify(error=str(exc)), 409
+    except Exception as exc:  # noqa: BLE001 - logged as a step and kept on the task
+        return jsonify(error=str(exc)[:300]), 502
+    return jsonify(done=outcome["done"])
 
 
 @app.get("/api/progress")

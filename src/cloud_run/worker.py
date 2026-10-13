@@ -101,11 +101,16 @@ def work_on(service, store, task_id, partner="assistant"):
         if task.get("result") else "")
     toolset = Toolset(store, service._google(), caller=f"{partner} (task)", secrets=service.secrets,
                       consult=service.consult_fn(partner), may_change=False)
+    toolset.task_id = task_id
+    title = task.get("title", "")
+    store.add_step({"caller": toolset.caller, "tool": "task_started", "detail": title[:240], "ok": True, "task_id": task_id})
     try:
         result = talk.PARTNERS[partner].respond(talk.system_prompt(store, partner, owner_email=service.owner_email),
                                                 [{"role": "user", "text": prompt}], toolset, service.secrets)
     except Exception as exc:
         store.save_task(task_id, {"working_since": "", "work_error": str(exc)[:300], "worked_at": utcnow_iso()})
+        store.add_step({"caller": toolset.caller, "tool": "task_failed", "detail": title[:240], "ok": False,
+                        "error": str(exc)[:200], "task_id": task_id})
         raise
     report = to_hk((result.get("text") or "").strip()) or "（沒有報告）"
     tools = result.get("tools", [])
@@ -113,6 +118,8 @@ def work_on(service, store, task_id, partner="assistant"):
     store.save_task(task_id, {"working_since": "", "work_error": "", "worked_at": utcnow_iso(), "result": report[:6000],
                               "work_tools": sorted({t.get("tool") for t in tools if t.get("tool")})})
     status = "done" if finished.get("status") == "done" else "still open"
+    store.add_step({"caller": toolset.caller, "tool": "task_done" if status == "done" else "task_paused",
+                    "detail": f"{title[:120]}：{report[:200]}", "ok": True, "task_id": task_id})
     store.append_talk(partner, [{"role": "assistant", "at": utcnow_iso(), "task_id": task_id, "tools": tools[-15:],
                                  "text": f"Worked on the task “{task.get('title', '')}” ({status}).\n\n{report}"}])
     return {"report": report, "tools": tools, "done": finished.get("status") == "done"}

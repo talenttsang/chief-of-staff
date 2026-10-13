@@ -56,6 +56,21 @@ class WebTests(unittest.TestCase):
         headers = {"X-Chat-Assistant": "1"} if csrf else {}
         return self.client.open(path, method=method, json=body, headers=headers)
 
+    def test_background_work_needs_the_run_token(self):
+        self.store.save_task("t1", {"title": "x", "status": "todo", "owner": "Assistant"})
+        self.assertEqual(self.client.post("/work/t1", headers={"X-Run-Token": "wrong"}).status_code, 403)
+        self.assertEqual(self.client.post("/work/none", headers={"X-Run-Token": "run-secret"}).status_code, 404)
+
+    def test_steps_show_the_log_and_what_is_being_worked(self):
+        from store import utcnow_iso
+
+        self.sign_in()
+        self.store.add_step({"caller": "assistant (task)", "tool": "browser", "detail": "open"})
+        self.store.save_task("t1", {"title": "E2E", "status": "in_progress", "working_since": utcnow_iso()})
+        body = self.call("GET", "/api/steps").get_json()
+        self.assertEqual(body["steps"][0]["tool"], "browser")
+        self.assertEqual([w["id"] for w in body["working"]], ["t1"])
+
     def test_signed_out(self):
         self.assertEqual(self.call("GET", "/api/state").status_code, 401)
         page = self.client.get("/")
@@ -103,7 +118,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/progress").status_code, 401)  # signed out
         self.sign_in()
         progress = self.call("GET", "/api/progress").get_json()
-        self.assertEqual((progress["running"], progress["phase"], progress["trigger"]), (False, "Done", "schedule"))
+        self.assertEqual((progress["running"], progress["phase"], progress["trigger"]), (False, "完成", "schedule"))
 
     def test_run_without_google_still_checks_systems(self):
         self.sign_in()
@@ -113,7 +128,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertIsNone(check.call_args.kwargs["google"])
         progress = self.call("GET", "/api/progress").get_json()
-        self.assertEqual((progress["running"], progress["phase"]), (False, "Done"))
+        self.assertEqual((progress["running"], progress["phase"]), (False, "完成"))
 
     def test_browser_screens_need_sign_in(self):
         self.store.save_browser_view("assistant", {"at": "2026-10-13T04:00:00+00:00", "action": "open", "image": "AA=="})
