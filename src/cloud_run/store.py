@@ -1,15 +1,15 @@
-"""Persistence for the Chat assistant: Firestore for app data, Secret Manager for credentials.
+"""Persistence for Man AI: Firestore for app data, Secret Manager for credentials.
 
 Both have an in-memory twin with the same interface, selected with
 STORE_BACKEND=memory, so the app and the hourly run can be exercised locally
 and in tests without GCP.
 
-Firestore layout (default database, collections prefixed chat_assistant_):
+Firestore layout (database FIRESTORE_DATABASE, collections prefixed chat_assistant_):
   chat_assistant/settings      auto_act flag and other toggles
-  chat_assistant/state         per-space watermarks, run lock
+  chat_assistant/state         run lock
   chat_assistant/config        generated session key
   chat_assistant_tasks/{id}    board cards
-  chat_assistant_actions/{id}  replies sent, events created, suggestions
+  chat_assistant_actions/{id}  changes made in systems and databases
   chat_assistant_runs/{id}     one summary per hourly run
 """
 
@@ -32,7 +32,6 @@ FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
 # "Tiered" autonomy: internal work runs on its own; anything that reaches
 # customers, money, staff or deletes data waits for the owner until loosened.
 AUTONOMY_CATEGORIES = {
-    "internal_chat": "Messages to colleagues in Google Chat",
     "calendar": "Calendar events and invites",
     "customer_messages": "Messages to customers or anyone outside the company",
     "money": "Refunds, prices, discounts, ad budgets, payments",
@@ -40,19 +39,18 @@ AUTONOMY_CATEGORIES = {
     "delete_data": "Deleting or overwriting data",
 }
 DEFAULT_AUTONOMY = {
-    "internal_chat": "auto", "calendar": "auto",
+    "calendar": "auto",
     "customer_messages": "ask", "money": "ask", "staff_hr": "ask", "delete_data": "ask",
 }
 
 DEFAULT_SETTINGS = {
     "auto_act": True,          # master switch: off = everything waits for approval
-    "read_bot_posts": False,
     "autonomy": DEFAULT_AUTONOMY,
     "partners_enabled": True,  # let Claude and ChatGPT see company context
     "openai_model": "",        # empty = OPENAI_MODEL env default
 }
 
-KB_KINDS = ("projects", "facts", "questions", "systems", "spaces")
+KB_KINDS = ("projects", "facts", "questions", "systems")
 
 
 def utcnow_iso():
@@ -100,7 +98,7 @@ class MemoryStore:
         merged["autonomy"] = {**DEFAULT_AUTONOMY, **(stored.get("autonomy") or {})}
         return merged
 
-    # -- knowledge base: projects, facts, questions, systems, spaces ----------
+    # -- knowledge base: projects, facts, questions, systems ----------------
     def list_items(self, kind):
         assert kind in KB_KINDS, kind
         return sorted(self._list(f"chat_assistant_{kind}"), key=lambda d: d.get("updated_at") or d.get("created_at", ""),
@@ -141,14 +139,6 @@ class MemoryStore:
     def update_settings(self, changes):
         self._set("chat_assistant", "settings", changes, merge=True)
         return self.get_settings()
-
-    def get_watermarks(self):
-        return (self._get("chat_assistant", "state") or {}).get("watermarks", {})
-
-    def set_watermarks(self, watermarks):
-        current = self.get_watermarks()
-        current.update(watermarks)
-        self._set("chat_assistant", "state", {"watermarks": current}, merge=True)
 
     def acquire_run_lock(self, seconds=3300):
         return self._try_lock(seconds)
@@ -275,11 +265,6 @@ class FirestoreStore(MemoryStore):
         except exceptions.AlreadyExists:
             pass
         return ref.get().to_dict()["session_key"]
-
-    def set_watermarks(self, watermarks):
-        # Merge so concurrent space results don't clobber each other.
-        ref = self._db.collection("chat_assistant").document("state")
-        ref.set({"watermarks": watermarks}, merge=True)
 
     def _try_lock(self, seconds):
         ref = self._db.collection("chat_assistant").document("state")

@@ -13,8 +13,7 @@ unblocking work, and reporting back.
   `talenttsang`). Connect GitHub on the Access tab to read repositories, issues, pull requests and CI.
 - Hosting: Google Cloud. Project `helperexpress-hk` (HelperXpress) runs the HelperXpress app (Cloud Run `helperexpress`, asia-east1) and Man AI itself (us-central1, its own database).
 - Man AI's Google account is helperxpresss@gmail.com: its Gmail, Calendar and Drive are what Man AI reads
-  (Connect Google on the Access tab). It's a Gmail account, so Google Chat and a company directory aren't
-  available; ask which tool the team uses to talk.
+  (Connect Google on the Access tab). Man AI doesn't read team chats; ask which tool the team uses to talk.
 - Man AI also has its own Google address, chat-assistant@helperexpress-hk.iam.gserviceaccount.com. Anyone can
   share a Drive folder or a calendar with it (like sharing with a colleague), and Man AI reads it as itself:
   shared_drive and shared_calendar in list_integrations. Nothing to connect, nothing that expires.

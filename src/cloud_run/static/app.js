@@ -2,7 +2,7 @@
 "use strict";
 
 const STATUS_ORDER = ["todo", "in_progress", "done"];
-const TYPE_LABEL = { chat_reply: "Chat reply", calendar_event: "Calendar event" };
+const TYPE_LABEL = { system_change: "Change" };
 const STATUS_LABEL = { done: "Done", suggested: "Waiting", failed: "Failed", dismissed: "Dismissed" };
 const SYSTEM_GROUPS = [
   ["requested", "Requested by the assistant"], ["needed", "Needed"], ["available", "Credentials exist, not connected yet"],
@@ -11,12 +11,10 @@ const SYSTEM_GROUPS = [
 ];
 // Google permissions in plain words, for the Reconnect banner.
 const SCOPE_LABEL = {
-  "chat.spaces.create": "starting a direct message with a colleague",
-  "chat.messages.create": "posting in Chat as you", "chat.spaces.readonly": "seeing your Chat conversations",
-  "chat.messages.readonly": "reading your Chat messages", "calendar.events": "your calendar",
+  "calendar.events": "your calendar",
   "gmail.readonly": "reading Gmail", "gmail.compose": "drafting emails", "drive.readonly": "reading Drive",
   "spreadsheets.readonly": "reading Sheets", "analytics.readonly": "Analytics", "webmasters.readonly": "Search Console",
-  "content": "Merchant Center", "directory.readonly": "the company directory",
+  "content": "Merchant Center",
 };
 const COMPANY_LABEL = { helperconnects: "HelperConnects", helperxpress: "HelperXpress", both: "Both" };
 const SUGGESTIONS = [
@@ -30,7 +28,6 @@ let partner = "assistant";
 let talkTurns = [];
 let editing = null;
 let editingProject = null;
-let sending = null;
 let talkBusy = false;
 
 const $ = (id) => document.getElementById(id);
@@ -115,7 +112,6 @@ function render() {
   renderHeader();
   renderBanners();
   renderPartners();
-  renderFilters();
   renderBoard();
   renderProjects();
   renderQuestions();
@@ -127,14 +123,13 @@ function renderHeader() {
   const run = state.status.last_run;
   $("dot").classList.toggle("on", state.connected && !state.status.connection_error);
   $("autoAct").checked = !!state.settings.auto_act;
-  if (!run) { $("lastrun").textContent = "No runs yet. It reads your chats every hour, or press Run now."; return; }
+  if (!run) { $("lastrun").textContent = "No runs yet. It works its own tasks every hour, or press Run now."; return; }
   if (run.error) {
     $("lastrun").textContent = `Last run ${ago(run.started_at)} failed: ${run.error}${run.trace ? " (details in Activity → Runs)" : ""}`;
     return;
   }
-  const learned = (run.projects || 0) + (run.facts || 0);
-  $("lastrun").textContent = `Last run ${ago(run.finished_at || run.started_at)} · ${plural(run.spaces_processed, "conversation")} · `
-    + `${plural(run.tasks_created, "new task")} · ${plural(learned, "thing")} learned · ${plural(run.actions_done, "action")} taken`;
+  $("lastrun").textContent = `Last run ${ago(run.finished_at || run.started_at)} · `
+    + `${plural((run.tasks_worked || []).length, "task")} worked · ${plural(run.systems_connected || 0, "system")} connected`;
 }
 
 function renderBanners() {
@@ -410,21 +405,10 @@ function afterConnectRedirect() {
 }
 
 // -- Board -----------------------------------------------------------------------------
-function renderFilters() {
-  const select = $("spaceFilter"); const current = select.value;
-  const labels = new Map();
-  for (const t of state.tasks) if (t.space) labels.set(t.space, t.space_label || t.space);
-  select.replaceChildren(el("option", { value: "" }, "All conversations"),
-    ...[...labels.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([k, v]) => el("option", { value: k }, v)));
-  select.value = labels.has(current) ? current : "";
-}
-
 function visibleTasks() {
   const q = $("q").value.trim().toLowerCase();
-  const space = $("spaceFilter").value;
   const owner = $("ownerFilter").value;
   return state.tasks.filter((t) => {
-    if (space && t.space !== space) return false;
     if (owner === "me" && !t.owner_is_me) return false;
     if (owner === "others" && t.owner_is_me) return false;
     if (q && !`${t.title} ${t.detail || ""} ${t.owner || ""} ${t.space_label || ""}`.toLowerCase().includes(q)) return false;
@@ -520,8 +504,6 @@ function openTask(t) {
   const src = $("taskSource"); src.replaceChildren();
   if (t && t.space_label) {
     src.append(`From ${where(t)}${t.source_excerpt ? `: “${t.source_excerpt}” ` : " "}`);
-    const link = safeUrl(t.space_uri);
-    if (link) src.append(el("a", { href: link, target: "_blank", rel: "noopener" }, "Open chat"));
   }
   $("taskDialog").showModal();
 }
@@ -539,7 +521,7 @@ $("taskForm").addEventListener("submit", async (e) => {
     status: f.status.value, priority: f.priority.value, owner_is_me: f.owner_is_me.checked };
   try {
     if (editing) await updateTask(editing.id, fields);
-    else { const { task } = await api("POST", "/api/tasks", fields); state.tasks.unshift(task); renderFilters(); renderBoard(); }
+    else { const { task } = await api("POST", "/api/tasks", fields); state.tasks.unshift(task); renderBoard(); }
     $("taskDialog").close();
   } catch (err) { toast(err.message); }
 });
@@ -549,11 +531,11 @@ $("deleteTask").onclick = async () => {
   try {
     await api("DELETE", `/api/tasks/${encodeURIComponent(editing.id)}`);
     state.tasks = state.tasks.filter((t) => t.id !== editing.id);
-    $("taskDialog").close(); renderFilters(); renderBoard();
+    $("taskDialog").close(); renderBoard();
   } catch (err) { toast(err.message); }
 };
 $("newTask").onclick = () => openTask(null);
-for (const id of ["q", "spaceFilter", "ownerFilter", "showDone"]) $(id).addEventListener("input", renderBoard);
+for (const id of ["q", "ownerFilter", "showDone"]) $(id).addEventListener("input", renderBoard);
 
 // -- Projects --------------------------------------------------------------------------
 function renderProjects() {
@@ -565,7 +547,7 @@ function renderProjects() {
   const box = $("projects");
   if (!items.length) {
     box.replaceChildren(el("div", { class: "empty" }, kb.projects.length ? "No projects match the filters"
-      : "No projects yet. They appear as the assistant reads your chats and hears your answers."));
+      : "No projects yet. They appear as the assistant hears your answers, or add one."));
     return;
   }
   box.replaceChildren(...items.map((p) => el("div", { class: "card", tabindex: "0", role: "button",
@@ -577,7 +559,7 @@ function renderProjects() {
       p.owner ? el("span", { class: "chip" }, p.owner) : null,
       p.deadline ? el("span", { class: "chip" }, `Due ${p.deadline}`) : null,
       openTasks(p.id) ? el("span", { class: "chip" }, plural(openTasks(p.id), "open task")) : null,
-      (p.spaces || []).length ? el("span", { class: "chip" }, plural(p.spaces.length, "chat")) : null),
+      null),
     (p.goal || p.summary) ? el("div", { class: "body" }, p.goal || p.summary) : null,
     p.next_steps ? el("div", { class: "body" }, `Next: ${p.next_steps}`) : null)));
 }
@@ -687,87 +669,32 @@ function renderSystems() {
 
 // -- Activity -----------------------------------------------------------------------------
 function actionItem(a) {
-  const link = safeUrl(a.space_uri);
   const top = el("div", { class: "top" },
     el("span", { class: `status ${a.status}` }, STATUS_LABEL[a.status] || a.status),
     el("b", {}, TYPE_LABEL[a.type] || a.type),
     el("span", {}, "in"),
-    link ? el("a", { href: link, target: "_blank", rel: "noopener" }, a.space_label || "chat") : el("span", {}, a.space_label || ""),
+    el("span", {}, a.space_label || ""),
     el("span", {}, `· ${ago(a.executed_at || a.created_at)}`));
-  const body = [top, el("div", { class: "quote" }, `${a.source_from || "Someone"}: ${a.source_excerpt || ""}`)];
-  if (a.type === "chat_reply") body.push(el("div", { class: "reply" }, a.reply_text || ""));
-  if (a.type === "calendar_event") body.push(el("div", { class: "reply" },
-    `${a.event_title} · ${(a.event_start || "").replace("T", " ").slice(0, 16)}–${(a.event_end || "").slice(11, 16)}`
-    + (a.event_attendees && a.event_attendees.length ? ` · with ${a.event_attendees.join(", ")}` : "")));
-  const why = [a.reason, a.blocked_reason ? `Held back: ${a.blocked_reason}` : "", a.error ? `Error: ${a.error}` : ""].filter(Boolean).join(" · ");
+  const body = [top];
+  if (a.reply_text) body.push(el("div", { class: "reply" }, a.reply_text));
+  const why = [a.reason, a.error ? `Error: ${a.error}` : ""].filter(Boolean).join(" · ");
   if (why) body.push(el("div", { class: "why" }, why));
-  const result = safeUrl(a.result);
-  if (a.status === "done" && result && a.type === "calendar_event") body.push(el("a", { href: result, target: "_blank", rel: "noopener" }, "Open event"));
-  if (a.status === "suggested" || a.status === "failed") {
-    body.push(el("div", { class: "actions" },
-      el("button", { class: "btn primary", onclick: () => sendAction(a) }, a.type === "chat_reply" ? "Review & send" : "Create event"),
-      el("button", { class: "btn", onclick: () => dismissAction(a) }, "Dismiss")));
-  }
   return el("div", { class: "item" }, body);
 }
 
 function renderActivity() {
-  const waiting = state.actions.filter((a) => a.status === "suggested");
-  const recent = state.actions.filter((a) => a.status !== "suggested").slice(0, 60);
-  const wc = $("waitingCount"); wc.textContent = waiting.length; wc.classList.toggle("hot", waiting.length > 0);
-  $("waiting").replaceChildren(...(waiting.length ? waiting.map(actionItem) : [el("div", { class: "empty" }, "Nothing waiting for your approval")]));
-  $("recent").replaceChildren(...(recent.length ? recent.map(actionItem) : [el("div", { class: "empty" }, "No actions yet")]));
+  const recent = state.actions.slice(0, 60);
+  $("recent").replaceChildren(...(recent.length ? recent.map(actionItem) : [el("div", { class: "empty" }, "No changes yet")]));
   $("runs").replaceChildren(...(state.runs.length ? state.runs.map((r) => el("tr", {},
     el("td", {}, new Date(r.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
     el("td", {}, r.trigger === "schedule" ? "Hourly" : "Manual"),
-    el("td", {}, r.error ? "–" : r.spaces_processed),
-    el("td", {}, r.error ? "–" : r.messages),
-    el("td", {}, r.error ? "–" : `${r.tasks_created} / ${r.tasks_updated}`),
-    el("td", {}, r.error ? "–" : `${r.projects || 0} projects · ${r.facts || 0} facts · ${r.questions || 0} questions`),
-    el("td", {}, r.error ? "–" : `${r.actions_done} / ${r.actions_suggested}`),
+    el("td", {}, r.error ? "–" : (r.tasks_worked || []).length),
+    el("td", {}, r.error ? "–" : r.systems_connected || 0),
     el("td", { class: (r.error || (r.errors || []).length) ? "err" : "" },
       r.error || (r.errors || []).map((e) => `${e.space}: ${e.error}`).join("; ") || "–",
       r.trace ? el("details", {}, el("summary", {}, "Technical details"),
         el("pre", { style: "white-space:pre-wrap;font-size:11px;max-height:260px;overflow:auto" }, r.trace)) : null)))
-    : [el("tr", {}, el("td", { colspan: "8", class: "empty" }, "No runs yet"))]));
-}
-
-async function sendAction(a) {
-  if (a.type === "chat_reply") {
-    sending = a;
-    $("sendContext").textContent = `${a.space_label || ""} · ${a.source_from || ""}: “${a.source_excerpt || ""}”`;
-    $("sendForm").reply_text.value = a.reply_text || "";
-    $("sendDialog").showModal();
-    return;
-  }
-  if (!confirm(`Create “${a.event_title}” and invite ${(a.event_attendees || []).join(", ") || "no one"}?`)) return;
-  await finishSend(a, {});
-}
-
-async function finishSend(a, body) {
-  try {
-    const { action } = await api("POST", `/api/actions/${encodeURIComponent(a.id)}/send`, body);
-    state.actions = state.actions.map((x) => (x.id === a.id ? { ...action, id: a.id } : x));
-    renderActivity();
-    toast(action.status === "done" ? "Done" : `Failed: ${action.error}`);
-  } catch (e) { toast(e.message); }
-}
-
-$("sendForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = e.target.reply_text.value.trim();
-  if (!text) return;
-  $("sendDialog").close();
-  await finishSend(sending, { reply_text: text });
-});
-$("cancelSend").onclick = () => $("sendDialog").close();
-
-async function dismissAction(a) {
-  try {
-    const { action } = await api("POST", `/api/actions/${encodeURIComponent(a.id)}/dismiss`);
-    state.actions = state.actions.map((x) => (x.id === a.id ? { ...action, id: a.id } : x));
-    renderActivity();
-  } catch (e) { toast(e.message); }
+    : [el("tr", {}, el("td", { colspan: "5", class: "empty" }, "No runs yet"))]));
 }
 
 // -- Settings -----------------------------------------------------------------------------
@@ -787,7 +714,6 @@ function renderSettings() {
   }
   $("partnersEnabled").checked = state.settings.partners_enabled !== false;
   $("openaiModel").value = state.settings.openai_model || "";
-  $("readBots").checked = !!state.settings.read_bot_posts;
 }
 
 $("openSettings").onclick = () => { renderSettings(); $("partnerResults").textContent = ""; $("settingsDialog").showModal(); };
@@ -809,10 +735,6 @@ $("partnersEnabled").addEventListener("change", async (e) => {
 $("openaiModel").addEventListener("change", async (e) => {
   try { state.settings = (await api("PATCH", "/api/settings", { openai_model: e.target.value })).settings; toast("Saved"); }
   catch (err) { toast(err.message); }
-});
-$("readBots").addEventListener("change", async (e) => {
-  try { state.settings = (await api("PATCH", "/api/settings", { read_bot_posts: e.target.checked })).settings; }
-  catch (err) { e.target.checked = !e.target.checked; toast(err.message); }
 });
 $("testPartners").onclick = async () => {
   const out = $("partnerResults"); out.replaceChildren(el("span", { class: "spinner" }), " testing…");
@@ -836,38 +758,18 @@ $("autoAct").addEventListener("change", async (e) => {
 const STALE_MS = 10 * 60 * 1000;  // a "running" record this old means the run died
 let pollTimer = null;
 let ownRun = false;               // true while this tab's Run now request is open
-let lastFound = "";               // tasks/actions found so far, to refresh the board as they arrive
 
 const isLive = (p) => !!(p && p.running && p.updated_at && Date.now() - new Date(p.updated_at).getTime() < STALE_MS);
-
-function eta(p) {
-  if (!p.reading_started_at || p.done < 2 || p.done >= p.total) return p.total ? "estimating time left" : "";
-  const perConversation = (Date.now() - new Date(p.reading_started_at).getTime()) / p.done;
-  const mins = Math.round((perConversation * (p.total - p.done)) / 60000);
-  return mins < 1 ? "less than a minute left" : `about ${mins} min left`;
-}
 
 function renderProgress(p) {
   const box = $("progress");
   if (!isLive(p)) { box.hidden = true; return; }
-  const reading = p.phase === "Reading conversations" && p.total > 0;
-  const pct = reading ? Math.round((p.done / p.total) * 100) : 0;
   const head = el("div", { class: "line1" },
     el("span", { class: "spinner", "aria-hidden": "true" }),
-    el("span", { class: "phase" }, reading ? `Reading conversations: ${p.done} of ${p.total}` : `${p.phase}…`),
-    el("span", { class: "eta" }, [p.trigger === "schedule" ? "hourly run" : "", eta(p)].filter(Boolean).join(" · ")));
-  const bar = el("div", { class: `bar${reading ? "" : " indeterminate"}`, role: "progressbar", "aria-label": "Run progress",
-      "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": reading ? String(pct) : null },
-    el("div", { style: reading ? `width:${pct}%` : null }));
-  const now = (p.current || []).length ? el("div", { class: "now" }, `Now reading: ${p.current.join(", ")}`) : null;
-  const sofar = reading ? el("div", { class: "sofar" }, "So far: " + [
-    plural(p.tasks_created, "new task"),
-    p.tasks_updated ? `${p.tasks_updated} updated` : "",
-    `${plural(p.actions_done, "action")} taken`,
-    p.actions_suggested ? `${p.actions_suggested} waiting for you` : "",
-    p.problems ? plural(p.problems, "problem") : "",
-  ].filter(Boolean).join(" · ")) : null;
-  box.replaceChildren(head, bar, now, sofar);
+    el("span", { class: "phase" }, `${p.phase}…`),
+    el("span", { class: "eta" }, p.trigger === "schedule" ? "hourly run" : ""));
+  const bar = el("div", { class: "bar indeterminate", role: "progressbar", "aria-label": "Run progress" }, el("div", {}));
+  box.replaceChildren(head, bar);
   box.hidden = false;
 }
 
@@ -882,15 +784,11 @@ async function pollProgress() {
   const live = isLive(p);
   setRunning(live || ownRun);
   if (live && !pollTimer) pollTimer = setInterval(pollProgress, 2000);
-  const found = `${p.tasks_created}/${p.tasks_updated}/${p.actions_done}/${p.actions_suggested}`;
-  if (live && found !== lastFound && !document.querySelector("dialog[open]")) load().catch(() => {});
-  lastFound = live ? found : "";
   if (!live && pollTimer) {
     clearInterval(pollTimer); pollTimer = null;
     if (!ownRun) {  // an hourly run (or another tab's) just ended: show its results
       await load().catch(() => {});
-      if (p.finished_at) toast(p.error ? `Run failed: ${p.error}`
-        : `Run finished: ${plural(p.tasks_created, "new task")}, ${plural(p.actions_done, "action")} taken`);
+      if (p.finished_at) toast(p.error ? `Run failed: ${p.error}` : "Run finished");
     }
   }
 }
@@ -901,7 +799,7 @@ $("runNow").onclick = async () => {
   setTimeout(pollProgress, 700);
   try {
     const r = await api("POST", "/api/run");
-    toast(`Read ${plural(r.spaces_processed, "conversation")}: ${plural(r.tasks_created, "new task")}, ${plural(r.actions_done, "action")} taken`);
+    toast(`Run finished: ${plural((r.tasks_worked || []).length, "task")} worked`);
   } catch (e) {
     toast(/already in progress/.test(e.message) ? "A run is already going. Showing its progress." : e.message);
   }

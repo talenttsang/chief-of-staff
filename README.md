@@ -1,61 +1,40 @@
-# Chat Assistant
+# Man AI
 
-A personal assistant for Manne that lives on Google Chat. Every hour it reads
-new messages in every space, group chat and DM Manne is in, keeps a project
-board current, and acts on Manne's behalf: it replies in Chat and adds
-calendar events.
+Chief of staff for **HelperConnects** and **HelperXpress**. It keeps a project
+board, learns every project through an interview and conversation, follows the
+code on GitHub, queries the HelperXpress database, reads the Gmail, Calendar
+and Drive of helperxpresss@gmail.com, and works its own tasks every hour. You
+talk to it in text or live voice, alongside two AI partners, Claude and ChatGPT.
+
+The Cloud Run service is still called `chat-assistant`. Features in detail:
+[COMPANY_ASSISTANT.md](COMPANY_ASSISTANT.md).
 
 ```
-Cloud Scheduler (hourly) ──POST /run──►  Cloud Run: chat-assistant (Flask)
-                                          │  as Manne (OAuth token in Secret Manager)
-                                          ├─ Chat API: spaces, messages, replies
-                                          ├─ People API: directory (ids → names)
-                                          ├─ Calendar API: events
-                                          ├─ Vertex AI Gemini: tasks + actions per conversation
-                                          └─ Firestore: board, activity, runs, watermarks
-Browser ──shared password──►  board · activity · pause switch · run now
+Cloud Scheduler (hourly) ──POST /run──►  Cloud Run: chat-assistant (Flask), project helperexpress-hk
+                                          ├─ Vertex AI Gemini, Claude, ChatGPT: the models
+                                          ├─ Firestore (database chat-assistant): board, knowledge, activity, runs
+                                          ├─ Secret Manager: password, Google token, keys
+                                          ├─ Google (helperxpresss@gmail.com): Gmail, Calendar, Drive
+                                          ├─ GitHub: repositories, issues, pull requests, CI
+                                          ├─ HelperXpress Postgres (Supabase): query_database
+                                          └─ Cloud Run: web-browser (sees web pages)
+Browser ──shared password──►  chat · board · projects · questions · access · activity
 ```
 
-## What it does each run
+## What each hourly run does
 
-1. Lists every conversation and picks those with messages newer than its
-   watermark (first run: the last 24 hours).
-2. For each one, fetches the new messages plus up to 20 earlier ones for
-   context, resolves who said what through the company directory, and asks
-   Gemini for **tasks** (new or updates to open ones) and **actions**.
-3. Applies tasks to the board. Tasks you've edited yourself are never
-   overwritten.
-4. Runs actions, or parks them as suggestions (see below).
-5. Advances the watermark. If a conversation fails, its watermark stays put
-   and the next run retries it.
-
-Conversations where every new post is from an app or bot (e.g. Reddit
-Notification) are skipped unless "Also read posts from apps and bots" is on.
-
-## Acting on its own, and the guardrails
-
-Replies go out **under Manne's name**. An action runs unreviewed only when
-all of these hold; otherwise it waits in **Activity → Waiting for you** with
-Review & send / Dismiss:
-
-| Check | Default | Env var |
-|---|---|---|
-| "Act automatically" switch is on | on | (UI) |
-| Answers a new message from another person, never Manne's own or a bot's | — | — |
-| That message is directed at Manne (DM, @mention, or clearly addressed) | — | — |
-| Manne hasn't already replied later in that thread | — | — |
-| Message is recent | ≤ 12 h | `ACT_MAX_AGE_HOURS` |
-| Gemini's confidence | ≥ 0.85 | `ACT_CONFIDENCE` |
-| Automatic actions per run | ≤ 10 | `MAX_ACTIONS_PER_RUN` |
-
-Calendar invites only go to people in the company directory. Every action,
-sent or held, is logged with the message it answers and the reason.
+It works up to `WORK_PER_RUN` (3) of Man AI's own open tasks that it hasn't
+worked on in the last six hours, then re-checks every connected system so the
+Access tab stays true. **Run now** starts a run at once. Man AI doesn't read
+team chats.
 
 ## Security
 
 - **Sign-in is one shared password**, kept in Secret Manager as
   `chat-assistant-password`. Changing it (in the app) signs every other
   browser out. Wrong passwords are rate-limited.
+- Everyone who signs in shares one conversation, so the models ask who is
+  typing when it matters.
 - **Connect Google** links one Google account (`GOOGLE_ACCOUNT`) for Gmail,
   Calendar and Drive; a token from any other account is ignored. There is no
   domain-wide delegation.
@@ -64,63 +43,63 @@ sent or held, is logged with the message it answers and the reason.
   disables the old version.
 - **That isolation holds only if nothing else has project-wide Secret Manager
   read access.** A project-level *Secret Manager Secret Accessor* (or Admin)
-  grant lets its holder read this token and post as the owner. Keep such
-  grants per secret, as `docs/credentials.md` says. Check before connecting:
-  IAM & Admin → IAM, look for Secret Manager roles granted on the project.
+  grant lets its holder read every key. Keep grants per secret. Check: IAM &
+  Admin → IAM on `helperexpress-hk`, look for Secret Manager roles granted on
+  the project.
+- Secrets come only from `helperexpress-hk`; the app refuses to start if
+  `SECRETS_PROJECT` is `shp-ai-bot-2026`.
+- The HelperXpress database is read in read-only transactions; a change runs
+  only after the owner approves the exact statement.
 - Scheduler calls `/run` with a shared token (`chat-assistant-run-token`);
   UI writes need the signed-in session plus a custom header (CSRF).
-- Revoke everything at <https://myaccount.google.com/permissions>.
 
-## One-time setup
+## Setup
 
-Console steps, all on project `helperexpress-hk`:
+Everything is on project `helperexpress-hk`. The service, its service account,
+the `chat-assistant` database and the hourly job already exist; `setup.sh`
+(run once by a project Owner, safe to re-run) recreates the account's grants,
+the app's secrets and the hourly job.
 
-1. **Google Chat API → Configuration**
-   (<https://console.cloud.google.com/apis/api/chat.googleapis.com/hangouts-chat?project=helperexpress-hk>):
-   app name, avatar URL, description; interactive features **off**. Save.
-2. **OAuth consent screen**: audience **Internal**. External apps in Testing
-   mode lose their sign-in after 7 days.
-3. **Credentials → Create credentials → OAuth client ID → Web application.**
-   Authorized redirect URIs, add both:
+1. **Password**: Secret Manager → `chat-assistant-password` → new version.
+2. **OAuth client** (for Connect Google): Credentials → OAuth client ID → Web
+   application, with these redirect URIs, then store the JSON as the secret
+   `chat-assistant-oauth-client`:
    - `https://chat-assistant-f2n7veewpa-uc.a.run.app/oauth/callback`
    - `https://chat-assistant-943501248136.us-central1.run.app/oauth/callback`
-
-   Download the JSON.
-4. **Secret Manager → Create secret** named `chat-assistant-oauth-client`,
-   upload that JSON file as the value, then delete the downloaded file.
-5. **Deploy**: merge to `main`, or GitHub → Actions → *Chat assistant
-   (deploy + hourly schedule)* → Run workflow. It enables the APIs, creates
-   the service account and secrets, deploys, and creates the hourly job. The
-   run summary prints the app URL.
-6. Open the app, sign in, press **Connect** and tick every permission. The
-   first hourly run happens on the hour; **Run now** starts one immediately.
-
-If the workflow warns it couldn't grant `roles/datastore.user` or
-`roles/aiplatform.user`, a project Owner must run the command it prints.
+3. **Deploy** from the repo root:
+   ```
+   gcloud run deploy chat-assistant --source src/cloud_run --region us-central1 --project helperexpress-hk
+   ```
+   The service keeps its settings (below) between deploys.
+4. Open <https://chat-assistant-f2n7veewpa-uc.a.run.app>, sign in, then on the
+   **Access** tab press **Connect Google** (as helperxpresss@gmail.com) and paste
+   a GitHub token.
 
 ## Configuration
 
-| Env var | Default |
-|---|---|
-| `OWNER_EMAIL` | `manne@superhairpieces.com` |
-| `GCP_PROJECT` | `helperexpress-hk` (Firestore, Vertex AI) |
-| `FIRESTORE_DATABASE` | `(default)` (the live app uses `chat-assistant`) |
-| `DATABASES` | none; `name=SECRET` pairs, e.g. `helperxpress=SUPABASE_DB_URL` (the secret holds a postgres:// URL) |
-| `SECRETS_PROJECT` | `helperexpress-hk` (where every secret is read and written) |
-| `GEMINI_MODEL` | `gemini-2.5-pro` |
-| `TIME_ZONE` | `America/Toronto` |
-| `INITIAL_LOOKBACK_HOURS` | `24` |
-| `PARALLEL_SPACES` | `4` |
+Live values are set on the Cloud Run service.
+
+| Env var | Live value | Default in code |
+|---|---|---|
+| `OWNER_EMAIL` | `talenttsang@gmail.com` | `manne@superhairpieces.com` |
+| `GOOGLE_ACCOUNT` | `helperxpresss@gmail.com` | `OWNER_EMAIL` |
+| `GCP_PROJECT` | `helperexpress-hk` | `helperexpress-hk` |
+| `SECRETS_PROJECT` | (unset) | `GCP_PROJECT` |
+| `FIRESTORE_DATABASE` | `chat-assistant` | `(default)` |
+| `DATABASES` | `helperxpress=SUPABASE_DB_URL` | none (`name=SECRET` pairs; the secret holds a postgres:// URL) |
+| `INTEGRATIONS` | `github` | every connector in `integrations.py` |
+| `BROWSER_URL` | the `web-browser` service | none (no browser tool) |
+| `PUBLIC_URL` | the service's URL | the request's host |
+| `TIME_ZONE` | | `America/Toronto` |
+| `WORK_PER_RUN` | | `3` |
+
+Models, voices and the rest: COMPANY_ASSISTANT.md → Configuration.
 
 ## Local development and tests
 
-Tests use a fake Google, a fake Gemini and an in-memory store, so they need
-no network or credentials:
+Tests use a fake Google, fake models and an in-memory store, so they need no
+network or credentials:
 
 ```
 python -m unittest discover -s tests
 ```
-
-`STORE_BACKEND=memory python src/cloud_run/main.py` runs the
-app locally against the in-memory store (sign-in still needs a real OAuth
-client).

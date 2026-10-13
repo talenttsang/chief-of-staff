@@ -1,49 +1,28 @@
-"""Google Chat, People (directory) and Calendar calls, made as the signed-in owner.
+"""Calls to Google as Man AI's Google account (GOOGLE_ACCOUNT), with its own OAuth token.
 
-Everything here runs with the owner's own OAuth token, so it can only see and
-do what the owner could in the Chat and Calendar UIs.
-
-With user auth the Chat API returns people as bare ids (`users/123`), never
-names. Chat user ids are People API person ids, so `Directory` loads the
-Workspace directory once per run and resolves ids to names and emails.
+The token can only see and do what that account could itself: its Gmail, Calendar and Drive, and the Google
+tools on the Access tab (integrations.py calls them through GoogleClient.auth_header).
 """
 
 import json
-import os
 
 import requests
 
-CHAT = "https://chat.googleapis.com/v1"
-PEOPLE = "https://people.googleapis.com/v1"
-CALENDAR = "https://www.googleapis.com/calendar/v3"
-
 IDENTITY_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email"]
-# Google Chat and the company directory exist only for Google Workspace accounts. GOOGLE_CHAT=0 (an owner on plain
-# Gmail): no Chat or directory permissions are asked for, the hourly run doesn't read chats, and the Chat tools
-# aren't offered. Everything else (calendar, Gmail, Drive, the web, voice, the partners) works the same.
-GOOGLE_CHAT = os.environ.get("GOOGLE_CHAT", "1") != "0"
-WORKSPACE_ONLY = ("/auth/chat.", "/auth/directory.")
 ASSISTANT_SCOPES = IDENTITY_SCOPES + [
-    "https://www.googleapis.com/auth/chat.spaces.readonly",
-    "https://www.googleapis.com/auth/chat.messages.readonly",
-    "https://www.googleapis.com/auth/chat.messages.create",
-    "https://www.googleapis.com/auth/chat.spaces.create",    # start a direct message with a colleague (after Manne's OK)
-    "https://www.googleapis.com/auth/chat.memberships.readonly",
     "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/directory.readonly",
 ]
 # Google tools the partners use through integrations.py (Access tab: Gmail, Drive/Sheets, Analytics, Search Console).
 GOOGLE_TOOL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.compose",        # drafts, sent only after Manne's OK
+    "https://www.googleapis.com/auth/gmail.compose",        # drafts, sent only after the owner's OK
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/analytics.readonly",
     "https://www.googleapis.com/auth/webmasters.readonly",
-    "https://www.googleapis.com/auth/content",               # Merchant Center (changes need Manne's OK)
+    "https://www.googleapis.com/auth/content",               # Merchant Center (changes need the owner's OK)
 ]
-ASSISTANT_SCOPES = [s for s in ASSISTANT_SCOPES + GOOGLE_TOOL_SCOPES
-                    if GOOGLE_CHAT or not any(part in s for part in WORKSPACE_ONLY)]
+ASSISTANT_SCOPES = ASSISTANT_SCOPES + GOOGLE_TOOL_SCOPES
 
 
 class GoogleApiError(RuntimeError):
@@ -86,7 +65,7 @@ class GoogleClient:
         import threading
 
         self.creds = credentials
-        self._refresh_lock = threading.Lock()  # the hourly run calls from several threads
+        self._refresh_lock = threading.Lock()  # requests can come from several threads
 
     def _auth(self):
         from google.auth.transport.requests import Request
@@ -97,7 +76,7 @@ class GoogleClient:
             return {"Authorization": f"Bearer {self.creds.token}"}
 
     def auth_header(self):
-        """For integrations.py: Google APIs called with Manne's own sign-in."""
+        """For integrations.py: Google APIs called with Man AI's Google sign-in."""
         return self._auth()
 
     def request(self, method, url, params=None, body=None):
@@ -120,121 +99,3 @@ class GoogleClient:
             if not token:
                 return
             params["pageToken"] = token
-
-    # -- Chat -----------------------------------------------------------------
-    def list_spaces(self):
-        return list(self.paginate(f"{CHAT}/spaces", "spaces", {"pageSize": 1000}))
-
-    def list_members(self, space_name):
-        return list(self.paginate(f"{CHAT}/{space_name}/members", "memberships", {"pageSize": 1000}))
-
-    def chat_user_id(self, space_name, email):
-        """The Chat id (users/123) of a member, looked up by email alias in a space they're in."""
-        membership = self.request("GET", f"{CHAT}/{space_name}/members/users/{email}")
-        return (membership.get("member") or {}).get("name", "")
-
-    def list_messages_since(self, space_name, since_iso, limit=300):
-        """Messages created after since_iso, oldest first (the API default order)."""
-        params = {"pageSize": 1000, "filter": f'createTime > "{since_iso}"'}
-        return list(self.paginate(f"{CHAT}/{space_name}/messages", "messages", params, limit=limit))
-
-    def list_messages_before(self, space_name, start_iso, end_iso, limit):
-        """The `limit` most recent messages in (start, end), returned oldest first."""
-        params = {"pageSize": limit, "orderBy": "createTime desc",
-                  "filter": f'createTime > "{start_iso}" AND createTime < "{end_iso}"'}
-        page = self.request("GET", f"{CHAT}/{space_name}/messages", params=params)
-        return list(reversed(page.get("messages", [])))
-
-    def find_direct_message(self, user):
-        """The direct message with a person (users/<email or id>), or None if there isn't one yet."""
-        try:
-            return self.request("GET", f"{CHAT}/spaces:findDirectMessage", params={"name": user})
-        except GoogleApiError as exc:
-            if exc.status == 404:
-                return None
-            raise
-
-    def start_direct_message(self, user):
-        """Opens a direct message with a person (needs chat.spaces.create). Returns the new space."""
-        return self.request("POST", f"{CHAT}/spaces:setup", body={
-            "space": {"spaceType": "DIRECT_MESSAGE"},
-            "memberships": [{"member": {"name": user, "type": "HUMAN"}}]})
-
-    def reply_in_thread(self, space_name, thread_name, text):
-        body = {"text": text}
-        params = {}
-        if thread_name:
-            body["thread"] = {"name": thread_name}
-            params["messageReplyOption"] = "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"
-        return self.request("POST", f"{CHAT}/{space_name}/messages", params=params, body=body)
-
-    # -- Calendar -------------------------------------------------------------
-    def create_event(self, title, start_iso, end_iso, time_zone, attendee_emails, description=""):
-        body = {
-            "summary": title,
-            "description": description,
-            "start": {"dateTime": start_iso, "timeZone": time_zone},
-            "end": {"dateTime": end_iso, "timeZone": time_zone},
-            "attendees": [{"email": e} for e in attendee_emails],
-        }
-        return self.request("POST", f"{CALENDAR}/calendars/primary/events",
-                            params={"sendUpdates": "all"}, body=body)
-
-    # -- Directory ------------------------------------------------------------
-    def load_directory(self):
-        people = self.paginate(f"{PEOPLE}/people:listDirectoryPeople", "people", {
-            "readMask": "names,emailAddresses",
-            "sources": "DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE",
-            "pageSize": 1000,
-        })
-        return Directory.from_people(people)
-
-
-class Directory:
-    """Chat user id -> {name, email}, for everyone in the Workspace directory."""
-
-    def __init__(self, entries=None):
-        self.entries = entries or {}  # "users/123" -> {"name":..., "email":...}
-
-    @classmethod
-    def from_people(cls, people):
-        entries = {}
-        for p in people:
-            pid = p.get("resourceName", "").split("/")[-1]
-            if not pid:
-                continue
-            names = p.get("names") or [{}]
-            emails = p.get("emailAddresses") or [{}]
-            entries[f"users/{pid}"] = {
-                "name": names[0].get("displayName") or emails[0].get("value") or pid,
-                "email": (emails[0].get("value") or "").lower(),
-            }
-        return cls(entries)
-
-    def name(self, user_name):
-        entry = self.entries.get(user_name)
-        return entry["name"] if entry else f"{user_name} (outside the directory)"
-
-    def email(self, user_name):
-        entry = self.entries.get(user_name)
-        return entry["email"] if entry else ""
-
-    def find(self, query):
-        """People matching a name or email, best tier first: exact email, exact name, first name (or the part
-        before @), then any part of the name. Each: {"user", "name", "email"}."""
-        q = " ".join((query or "").lower().split())
-        if not q:
-            return []
-        people = [{"user": u, "name": e.get("name", ""), "email": e.get("email", "")} for u, e in self.entries.items()]
-        tiers = (lambda p: p["email"] == q,
-                 lambda p: p["name"].lower() == q,
-                 lambda p: p["name"].lower().split()[:1] == [q] or p["email"].split("@")[0] == q,
-                 lambda p: q in p["name"].lower())
-        for test in tiers:
-            found = [p for p in people if test(p)]
-            if found:
-                return found
-        return []
-
-    def known_emails(self):
-        return {e["email"] for e in self.entries.values() if e.get("email")}

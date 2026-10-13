@@ -1,4 +1,4 @@
-"""Chat Assistant: a project board that an AI keeps current from your Google Chat.
+"""Man AI: a chief of staff that keeps a project board, learns the businesses and works its own tasks.
 
 Routes
   GET  /                 the board (the password page when signed out)
@@ -10,7 +10,6 @@ Routes
   GET  /api/state        tasks, activity, runs, settings, connection status
   GET  /api/progress     live progress of the running (or last) pass
   POST/PATCH/DELETE /api/tasks[/<id>]
-  POST /api/actions/<id>/send | /dismiss
   PATCH /api/settings
   POST /api/run          run now (from the UI)
   POST /run              hourly run (Cloud Scheduler, X-Run-Token header)
@@ -40,7 +39,7 @@ import assistant
 import integrations
 import knowledge
 import worker
-from google_apis import (ASSISTANT_SCOPES, GOOGLE_CHAT, IDENTITY_SCOPES, GoogleClient, credentials_from_json,
+from google_apis import (ASSISTANT_SCOPES, IDENTITY_SCOPES, GoogleClient, credentials_from_json,
                          naive_utc_expiry)
 from store import AUTONOMY_CATEGORIES, make_secrets, make_store, utcnow_iso
 from talk import PARTNERS, Talk
@@ -99,15 +98,8 @@ def make_google():
     return GoogleClient(credentials_from_json(token)) if token else None
 
 
-def make_llm():
-    from llm import Gemini
-
-    return Gemini()
-
-
 # Tests swap these for fakes.
 app.config["MAKE_GOOGLE"] = make_google
-app.config["MAKE_LLM"] = make_llm
 
 
 # -- access control ----------------------------------------------------------------
@@ -370,8 +362,6 @@ def api_state():
         connected=bool(token),
         status=status,
         settings=store.get_settings(),
-        limits={"act_confidence": assistant.ACT_CONFIDENCE, "max_actions": assistant.MAX_ACTIONS_PER_RUN,
-                "act_max_age_hours": assistant.ACT_MAX_AGE_HOURS},
         tasks=store.list_tasks(),
         actions=store.list_actions(150),
         runs=store.list_runs(12),
@@ -434,33 +424,10 @@ def api_delete_task(task_id):
     return jsonify(ok=True)
 
 
-@app.post("/api/actions/<action_id>/send")
-def api_send_action(action_id):
-    action = store.get_action(action_id)
-    if not action or action.get("status") not in ("suggested", "failed"):
-        return jsonify(error="That suggestion is no longer waiting."), 409
-    body = request.get_json(silent=True) or {}
-    if action["type"] == "chat_reply" and body.get("reply_text"):
-        action["reply_text"] = str(body["reply_text"]).strip()[:4000]
-    google = app.config["MAKE_GOOGLE"]()
-    if not google:
-        return jsonify(error="Connect Google first."), 409
-    outcome = assistant.execute_action(google, {k: v for k, v in action.items() if k != "id"})
-    outcome["sent_by"] = "you"
-    return jsonify(action=store.save_action(action_id, outcome))
-
-
-@app.post("/api/actions/<action_id>/dismiss")
-def api_dismiss_action(action_id):
-    if not store.get_action(action_id):
-        return jsonify(error="No such suggestion."), 404
-    return jsonify(action=store.save_action(action_id, {"status": "dismissed", "executed_at": utcnow_iso()}))
-
-
 @app.patch("/api/settings")
 def api_settings():
     body = request.get_json(force=True) or {}
-    changes = {k: bool(body[k]) for k in ("auto_act", "read_bot_posts", "partners_enabled") if k in body}
+    changes = {k: bool(body[k]) for k in ("auto_act", "partners_enabled") if k in body}
     if isinstance(body.get("autonomy"), dict):
         current = store.get_settings()["autonomy"]
         changes["autonomy"] = {**current, **{k: v for k, v in body["autonomy"].items()
@@ -791,15 +758,12 @@ def do_run(trigger):
         google = app.config["MAKE_GOOGLE"]()
         if not google:
             raise assistant.ReconnectNeeded("Google isn't connected yet.")
-        if GOOGLE_CHAT:
-            summary = assistant.run(store, google, app.config["MAKE_LLM"](), progress=progress)
-        else:  # no Google Chat (a Gmail owner): the run works the assistant's tasks and checks the systems
-            summary = assistant.empty_summary()
+        summary = assistant.empty_summary()
         summary["trigger"] = trigger
         progress.phase("Working on the assistant's own tasks")
         try:
             summary["tasks_worked"] = worker.work_due(talk_service(), store)
-        except Exception as exc:  # noqa: BLE001 - reading chats still counts as a good run
+        except Exception as exc:  # noqa: BLE001 - the connection check below still runs
             summary["errors"].append({"space": "(assistant's tasks)", "error": str(exc)[:300]})
         try:  # keep the Access tab true: a status stuck on an old failure fixes itself within the hour
             checked = integrations.check_all(secret_store, store, google=google)
@@ -807,6 +771,7 @@ def do_run(trigger):
             summary["systems_connected"] = sum(1 for r in checked.values() if r["ok"])
         except Exception as exc:  # noqa: BLE001
             summary["errors"].append({"space": "(connections)", "error": str(exc)[:300]})
+        summary["finished_at"] = utcnow_iso()
         store.add_run(summary)
         store.set_status({"last_run": summary, "connection_error": ""})
         progress.finish()

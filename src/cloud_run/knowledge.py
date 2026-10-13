@@ -37,7 +37,7 @@ SEED_SYSTEMS = [
      "Deploys, logs and costs of the HelperConnects and HelperXpress apps."),
     ("error_tracking", "Error tracking (Sentry?)", "Engineering", "needed", "Production errors to triage."),
     ("team_chat", "Team chat (Slack, WhatsApp, Discord?)", "Communication", "needed",
-     "Where the team talks (Google Chat isn't available on a Gmail account)."),
+     "Where the team talks."),
 ]
 
 SEED_QUESTIONS = [
@@ -171,7 +171,7 @@ def save_project(store, fields, source=""):
         return None
     pid = slug(clean["name"], "p-")
     return store.save_item("projects", pid, {"company": "", "goal": "", "owner": "", "status": "active", "deadline": "",
-                                             "summary": "", "next_steps": "", "spaces": [], **clean,
+                                             "summary": "", "next_steps": "", **clean,
                                              "source": source[:120], "created_at": now, "updated_at": now})
 
 

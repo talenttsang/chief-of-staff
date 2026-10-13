@@ -57,7 +57,7 @@ How you work:
 - When you need a system that isn't connected, say which one and that Manne can press Connect on the Access
   tab; record it with request_access: what it unlocks and why.
 - Respect autonomy. Anything in an "ask" category (customer-facing messages, money, staff/HR, deleting data)
-  is proposed, not done. Only send a Chat message after Manne approved the exact text.
+  is proposed, not done.
 - Be honest about what you did. Tools report results; never claim an action a tool didn't confirm.
 - Be concise and concrete: names, numbers, dates, next steps.
 """
@@ -127,7 +127,7 @@ class Talk:
             if not ok:
                 return f"({PARTNERS[partner].LABEL} isn't available: {why})"
             toolset = Toolset(self.store, self._google(), caller=partner, secrets=self.secrets, may_change=False,
-                              exclude=("send_chat_message", "set_autopilot", "consult_partner"))
+                              exclude=("set_autopilot", "consult_partner"))
             result = PARTNERS[partner].respond(
                 system_prompt(self.store, partner, consulted=True, owner_email=self.owner_email),
                 [{"role": "user", "text": f"Request from the {caller}: {request}"}],
@@ -162,7 +162,7 @@ class Talk:
     def digest_answer(self, question, answer):
         """Fold an answer from the Questions tab into the knowledge base using the assistant's tools."""
         toolset = Toolset(self.store, self._google(), caller="interview", may_change=False,
-                          exclude=("send_chat_message", "set_autopilot", "consult_partner", "call_api"))
+                          exclude=("set_autopilot", "consult_partner", "call_api"))
         prompt = (f"Manne answered a question from your queue.\n\nQuestion [{question['id']}]: {question['question']}\n\n"
                   f"Answer: {answer}\n\nUpdate the knowledge base from this answer: save or update every project it "
                   "mentions (save_project), record each distinct fact (record_fact), add tasks it implies "

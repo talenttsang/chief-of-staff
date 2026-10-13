@@ -11,8 +11,8 @@ Three ways a system gets connected (the Access tab's Connect buttons):
   reads what people share with that address (a Drive folder, a calendar). No sign-in,
   no key, nothing that expires: Cloud Run hands the app its tokens.
 
-The assistant reads chats written by many people, so any of them could try to talk
-it into misusing a key. The rules that make that fail:
+Everyone who signs in shares one conversation, and pages and emails it reads are written by
+others, so any of them could try to talk it into misusing a key. The rules that make that fail:
 
 - Key values never reach a model. The server adds them to each request (logins such
   as SkuVault's and Amazon's are exchanged for tokens on the server), and scrubs

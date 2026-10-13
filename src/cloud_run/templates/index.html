@@ -193,13 +193,12 @@
     <button class="tab" data-tab="projects">Projects <span class="count" id="projectCount">0</span></button>
     <button class="tab" data-tab="questions">Questions <span class="count" id="questionCount">0</span></button>
     <button class="tab" data-tab="access">Access <span class="count" id="accessCount">0</span></button>
-    <button class="tab" data-tab="activity">Activity <span class="count" id="waitingCount">0</span></button>
+    <button class="tab" data-tab="activity">Activity</button>
   </nav>
 
   <section id="view-board">
     <div class="toolbar">
       <input type="search" id="q" placeholder="Search tasks" aria-label="Search tasks">
-      <select id="spaceFilter" aria-label="Conversation"><option value="">All conversations</option></select>
       <select id="ownerFilter" aria-label="Owner">
         <option value="">Everyone</option>
         <option value="me">Mine</option>
@@ -217,7 +216,7 @@
   </section>
 
   <section id="view-projects" hidden>
-    <p class="hint">Every project the assistant knows about. It adds them from your chats and your answers; you can add and correct them too.</p>
+    <p class="hint">Every project the assistant knows about. It adds them from your answers and conversations with it; you can add and correct them too.</p>
     <div class="toolbar">
       <select id="companyFilter" aria-label="Company">
         <option value="">Both companies</option>
@@ -253,13 +252,11 @@
   </section>
 
   <section id="view-activity" hidden>
-    <h3>Waiting for you</h3>
-    <div id="waiting"></div>
-    <h3>Recent actions</h3>
+    <h3>Changes made</h3>
     <div id="recent"></div>
     <h3>Runs</h3>
     <div class="tablewrap"><table class="runs"><thead><tr>
-      <th>When</th><th>Trigger</th><th>Conversations</th><th>Messages</th><th>Tasks new / updated</th><th>Learned</th><th>Actions done / waiting</th><th>Problems</th>
+      <th>When</th><th>Trigger</th><th>Tasks worked</th><th>Systems connected</th><th>Problems</th>
     </tr></thead><tbody id="runs"></tbody></table></div>
   </section>
 </main>
@@ -339,18 +336,6 @@
   </form>
 </dialog>
 
-<dialog id="sendDialog">
-  <form method="dialog" id="sendForm">
-    <h2>Send this reply?</h2>
-    <div class="why" id="sendContext"></div>
-    <label>Reply, sent as you <textarea name="reply_text" maxlength="4000"></textarea></label>
-    <div class="dialog-foot">
-      <button type="button" class="btn" id="cancelSend">Cancel</button>
-      <button type="submit" class="btn primary">Send</button>
-    </div>
-  </form>
-</dialog>
-
 <dialog id="connectDialog">
   <form method="dialog" id="connectForm">
     <h2 id="connectTitle">Connect</h2>
@@ -383,8 +368,6 @@
       <input type="password" id="newPassword" aria-label="New password" placeholder="New password" autocomplete="new-password" maxlength="200" style="flex:1;min-width:160px">
       <button type="button" class="btn" id="changePassword">Change password</button>
     </div>
-    <h4>Reading</h4>
-    <label class="check"><input type="checkbox" id="readBots"> Also read posts from apps and bots (e.g. notification spaces)</label>
     <div class="dialog-foot">
       <button type="button" class="btn primary" id="closeSettings">Done</button>
     </div>
