@@ -21,7 +21,7 @@ from zh import to_hk
 OWNER = "Assistant"
 WORK_PER_RUN = int(os.environ.get("WORK_PER_RUN", "3"))   # tasks the hourly run works, at most
 REWORK_HOURS = 6        # a task in progress is picked up again after this long
-BUSY_MINUTES = 15       # one task isn't worked twice at the same time
+STALL_MINUTES = 6       # a task being worked with no step for this long was cut off (a deploy, a crash)
 ROUNDS = int(os.environ.get("WORK_ROUNDS", "8"))  # a handed-over task goes on round after round, at most this many
 MAX_PARALLEL = 3        # tasks worked at the same time; more wait for the hourly run
 
@@ -52,7 +52,8 @@ one precise question. Record anything worth keeping (record_fact, save_project).
 Problems you find go on the board and get fixed, not just reported. For each real problem in the app (a bug, an
 error, a broken or confusing page, a step a user can't get past): list_tasks first so you don't add it twice, then
 create_task (title: what's wrong; detail: the page, the steps to reproduce, what happened and what should happen;
-owner Assistant; the same project), then start_task it. Working that task means fixing it: find the code
+the same project). Leave the owner empty: a task you add while working is yours and starts at once (set an owner
+only for something a person must do). Working that task means fixing it: find the code
 (call_api on GitHub), fix it with commit_code, check the deploy, and test it again. Then carry on with this task.
 Trouble with your own browser (an element you couldn't find or click) is not a problem in the app: try another
 way first (x,y from the screenshot, the label from elements).
@@ -68,20 +69,25 @@ def is_mine(task):
 
 
 def _busy(task, now):
-    since = task.get("working_since")
-    if not since:
+    """Being worked right now: started, and a step (the heartbeat) not long ago. One task isn't worked twice."""
+    if not task.get("working_since"):
         return False
     try:
-        started = datetime.fromisoformat(since)
+        last = max(datetime.fromisoformat(task["working_since"]), datetime.fromisoformat(task.get("heartbeat") or task["working_since"]))
     except ValueError:
         return False
-    return now - started < timedelta(minutes=BUSY_MINUTES)
+    return now - last < timedelta(minutes=STALL_MINUTES)
+
+
+def interrupted(task, now):
+    """Started but gone quiet: the work was cut off, e.g. a deploy replaced the server mid-round."""
+    return bool(task.get("working_since")) and not _busy(task, now)
 
 
 def due_for_work(task, now):
     if not is_mine(task) or _busy(task, now):
         return False
-    if not task.get("worked_at"):
+    if task.get("interrupted") or not task.get("worked_at"):
         return True
     try:
         return now - datetime.fromisoformat(task["worked_at"]) >= timedelta(hours=REWORK_HOURS)
@@ -104,7 +110,8 @@ def work_on(service, store, task_id, partner="assistant"):
         raise KeyError(task_id)
     if _busy(task, now):
         raise Busy("The assistant is already working on this task.")
-    store.save_task(task_id, {"working_since": utcnow_iso(), "owner": OWNER, "owner_is_me": False,
+    store.save_task(task_id, {"working_since": utcnow_iso(), "heartbeat": "", "interrupted": False, "owner": OWNER,
+                              "owner_is_me": False,
                               **({"status": "in_progress"} if task.get("status") == "todo" else {})})
     project = store.get_item("projects", task["project_id"]) if task.get("project_id") else None
     prompt = PROMPT.format(
@@ -170,6 +177,25 @@ def work_until_stuck(service, store, task_id, rounds=ROUNDS):
     store.add_step({"caller": "assistant (task)", "tool": tool, "detail": f"{task.get('title', '')[:120]}：{why}",
                     "ok": not stuck, "task_id": task_id})
     return dict(outcome, stopped=why)
+
+
+def resume_interrupted(store, starter):
+    """Find tasks whose work was cut off, say so in the work log (the page tells people), and start them again.
+    Called every few minutes (POST /watchdog) and by the hourly run."""
+    now = datetime.now(timezone.utc)
+    resumed = []
+    for task in store.list_tasks():
+        if not (is_mine(task) and interrupted(task, now)):
+            continue
+        store.save_task(task["id"], {"working_since": "", "interrupted": True})
+        again = busy_count(store) < MAX_PARALLEL
+        store.add_step({"caller": "assistant (task)", "tool": "task_interrupted", "ok": True, "task_id": task["id"],
+                        "detail": f"{task.get('title', '')[:120]}：工作被中斷（例如系統更新），"
+                                  + ("已自動重新開始" if again else "下次每小時執行時會繼續")})
+        if again:
+            starter(task["id"])
+        resumed.append(task["id"])
+    return resumed
 
 
 def busy_count(store):

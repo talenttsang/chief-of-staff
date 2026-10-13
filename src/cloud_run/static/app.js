@@ -854,7 +854,7 @@ async function pollBrowser() {
 // -- Progress: the AI's work log, step by step ---------------------------------------------------
 const STEP_LABEL = {
   task_started: "開始處理任務", task_done: "完成任務", task_paused: "暫停任務", task_failed: "任務出錯",
-  task_report: "進度報告（繼續處理）", task_needs_you: "需要你回答",
+  task_report: "進度報告（繼續處理）", task_needs_you: "需要你回答", task_interrupted: "工作被中斷",
   browser: "瀏覽器", web_search: "搜尋網頁", read_webpage: "閱讀網頁", call_api: "查詢系統", query_database: "查詢資料庫",
   commit_code: "提交程式碼", start_task: "交給自己處理", create_task: "新增任務", update_task: "更新任務",
   delete_task: "刪除任務", list_tasks: "查看工作板", save_project: "儲存項目", delete_project: "刪除項目",
@@ -864,8 +864,9 @@ const STEP_LABEL = {
   delete_system: "刪除系統", list_integrations: "查看已連接系統", list_calendar: "查看日曆", consult_partner: "請教 AI 夥伴",
   assistant_status: "查看狀態", set_autopilot: "設定自動執行",
 };
-const MARKS = new Set(["task_started", "task_done", "task_paused", "task_failed", "task_report", "task_needs_you"]);
-const STOPS = new Set(["task_done", "task_paused", "task_failed", "task_needs_you"]);  // a task stopped: tell people
+const MARKS = new Set(["task_started", "task_done", "task_paused", "task_failed", "task_report", "task_needs_you",
+  "task_interrupted"]);
+const STOPS = new Set(["task_done", "task_paused", "task_failed", "task_needs_you", "task_interrupted"]);  // a task stopped: tell people
 let stepsData = { steps: [], working: [] };
 
 function stepWho(caller) {
@@ -904,7 +905,8 @@ let unseenStops = 0;
 try { seenStep = localStorage.getItem("seenStep"); } catch { /* storage unavailable */ }
 
 function stopText(s) {
-  const head = { task_done: "✅ 完成", task_needs_you: "❓ 需要你", task_paused: "⏸ 暫停", task_failed: "⚠️ 出錯" }[s.tool];
+  const head = { task_done: "✅ 完成", task_needs_you: "❓ 需要你", task_paused: "⏸ 暫停", task_failed: "⚠️ 出錯",
+    task_interrupted: "🔄 中斷" }[s.tool];
   return `${head}：${s.detail || ""}`.slice(0, 220);
 }
 

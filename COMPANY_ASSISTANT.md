@@ -126,8 +126,13 @@ A handed-over task goes on round after round (each round is one model turn of up
 `WORK_ROUNDS` (8), until it's done, it asks Manne a question, or a round gets nowhere (no tool calls, or most of
 them failed). A task left open is picked up again by the hourly run after six hours.
 
+A deploy (including one the AI starts by committing code) replaces the server and cuts off work in progress.
+Each step is a heartbeat on its task; every 5 minutes Cloud Scheduler's `chat-assistant-watchdog` calls
+`POST /watchdog`, which finds tasks that went quiet mid-work for `STALL_MINUTES` (6), logs 工作被中斷 (people
+are told) and starts them again. Tasks worked side by side each have their own browser tab.
+
 Problems it finds while working (a bug, an error, a step a user can't get past) go on the board as their own
-tasks, with the steps to reproduce, and it starts them at once: working such a task means finding the code,
+tasks, with the steps to reproduce; a task it adds while working is its own and starts at once: working such a task means finding the code,
 fixing it with `commit_code`, checking the deploy and testing again. Trouble with its own browser isn't filed.
 
 **工作進度 (Progress tab)** shows every step as it happens: each tool call (a short summary, never file

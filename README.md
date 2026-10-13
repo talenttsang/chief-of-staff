@@ -56,9 +56,9 @@ team chats.
 ## Setup
 
 Everything is on project `helperexpress-hk`. The service, its service account,
-the `chat-assistant` database and the hourly job already exist; `setup.sh`
+the `chat-assistant` database, the hourly job and the 5-minute watchdog already exist; `setup.sh`
 (run once by a project Owner, safe to re-run) recreates the account's grants,
-the app's secrets and the hourly job.
+the app's secrets and both scheduler jobs.
 
 1. **Password**: Secret Manager → `chat-assistant-password` → new version.
 2. **OAuth client** (for Connect Google): Credentials → OAuth client ID → Web

@@ -67,4 +67,10 @@ args=(--location $REGION --project $PROJECT --schedule "0 * * * *" --time-zone A
 gcloud scheduler jobs update http chat-assistant-hourly "${args[@]}" --update-headers "X-Run-Token=$TOKEN" >/dev/null 2>&1 \
   || gcloud scheduler jobs create http chat-assistant-hourly "${args[@]}" --headers "X-Run-Token=$TOKEN" >/dev/null
 
-echo "Talent Solutions AI setup done: service account, secrets and hourly job are in place."
+# Every 5 minutes: restart tasks whose work was cut off (a deploy replaces the server mid-task).
+args=(--location $REGION --project $PROJECT --schedule "*/5 * * * *" --time-zone America/Toronto
+      --uri $URL/watchdog --http-method POST --attempt-deadline 60s --quiet)
+gcloud scheduler jobs update http chat-assistant-watchdog "${args[@]}" --update-headers "X-Run-Token=$TOKEN" >/dev/null 2>&1 \
+  || gcloud scheduler jobs create http chat-assistant-watchdog "${args[@]}" --headers "X-Run-Token=$TOKEN" >/dev/null
+
+echo "Talent Solutions AI setup done: service account, secrets, the hourly job and the watchdog are in place."

@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import knowledge  # noqa: E402
 import talk  # noqa: E402
-from store import MemorySecrets, MemoryStore  # noqa: E402
+from store import MemorySecrets, MemoryStore, utcnow_iso  # noqa: E402
 from test_assistant import scenario  # noqa: E402
 from tools import SPECS, Toolset, to_gemini_schema  # noqa: E402
 
@@ -883,13 +883,44 @@ class ResearchAndWorkTests(unittest.TestCase):
         import worker
 
         self.assertIn("create_task", worker.PROMPT)
-        self.assertIn("start_task it", worker.PROMPT)
+        self.assertIn("starts at once", worker.PROMPT)
         self.assertIn("commit_code", worker.PROMPT)
         self.store.save_task("t1", {"title": "E2E", "status": "todo", "owner": "Assistant"})
         fake = FakePartner("Found a bug.")
         with mock.patch.dict(talk.PARTNERS, {"assistant": fake}):
             worker.work_on(talk.Talk(self.store, self.secrets, lambda: None, "x@y", starter=lambda t: None), self.store, "t1")
         self.assertIn("start_task", fake.calls[0]["tools"])  # working alone it can start the fix
+
+    def test_work_cut_off_by_a_deploy_is_announced_and_restarted(self):
+        import worker
+        from datetime import datetime, timedelta, timezone
+
+        long_ago = (datetime.now(timezone.utc) - timedelta(minutes=worker.STALL_MINUTES + 1)).isoformat()
+        self.store.save_task("cut", {"title": "E2E", "status": "in_progress", "owner": "Assistant",
+                                     "working_since": long_ago, "heartbeat": long_ago, "worked_at": utcnow_iso()})
+        self.store.save_task("live", {"title": "Busy", "status": "in_progress", "owner": "Assistant",
+                                      "working_since": long_ago, "heartbeat": utcnow_iso()})
+        started = []
+        self.assertEqual(worker.resume_interrupted(self.store, started.append), ["cut"])
+        self.assertEqual(started, ["cut"])
+        self.assertEqual(self.store.list_steps()[0]["tool"], "task_interrupted")
+        cut = self.store.get_task("cut")
+        self.assertEqual(cut["working_since"], "")
+        self.assertTrue(worker.due_for_work(cut, datetime.now(timezone.utc)))  # the hourly run takes it, too
+
+    def test_a_problem_found_while_working_is_the_ais_and_starts(self):
+        started = []
+        self.store.save_task("t1", {"title": "E2E", "status": "in_progress", "owner": "Assistant"})
+        tools = Toolset(self.store, None, caller="assistant (task)", starter=started.append)
+        tools.task_id = "t1"
+        bug = tools.call("create_task", {"title": "Bug: Matches page empty", "detail": "steps"})
+        self.assertTrue(bug["started"])
+        self.assertEqual((bug["task"]["owner"], started), ("Assistant", [bug["task"]["id"]]))
+        tools.call("start_task", {"task_id": bug["task"]["id"]})
+        self.assertEqual(len(started), 1)  # not started twice
+        person = tools.call("create_task", {"title": "Send Stripe test keys", "owner": "Manne"})
+        self.assertNotIn("started", person)
+        self.assertTrue(self.store.get_task("t1")["heartbeat"])  # each step is a heartbeat for the watchdog
 
     def test_start_task_waits_when_enough_are_running(self):
         import worker

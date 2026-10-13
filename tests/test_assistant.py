@@ -56,6 +56,10 @@ class WebTests(unittest.TestCase):
         headers = {"X-Chat-Assistant": "1"} if csrf else {}
         return self.client.open(path, method=method, json=body, headers=headers)
 
+    def test_watchdog_needs_the_run_token(self):
+        self.assertEqual(self.client.post("/watchdog", headers={"X-Run-Token": "wrong"}).status_code, 403)
+        self.assertEqual(self.client.post("/watchdog", headers={"X-Run-Token": "run-secret"}).get_json(), {"resumed": []})
+
     def test_background_work_needs_the_run_token(self):
         self.store.save_task("t1", {"title": "x", "status": "todo", "owner": "Assistant"})
         self.assertEqual(self.client.post("/work/t1", headers={"X-Run-Token": "wrong"}).status_code, 403)

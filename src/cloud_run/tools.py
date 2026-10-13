@@ -15,6 +15,7 @@ import os
 import re
 import threading
 import time
+from datetime import datetime, timezone
 
 import databases
 import github_code
@@ -244,6 +245,8 @@ class Toolset:
             error = str(result.get("error") or "")[:200] if isinstance(result, dict) else ""
             self.store.add_step({"caller": self.caller, "tool": name, "detail": detail[:240], "ok": not error,
                                  "error": error, "task_id": self.task_id})
+            if self.task_id and self.store.get_task(self.task_id):  # the heartbeat: a task that goes quiet mid-work gets restarted (worker.resume_interrupted)
+                self.store.save_task(self.task_id, {"heartbeat": utcnow_iso()})
         except Exception as exc:  # noqa: BLE001 - the log is a courtesy; the call already happened
             print(f"step not logged: {exc!r}")
 
@@ -354,10 +357,16 @@ class Toolset:
             return self._bad_task_fields(fields)
 
         now = utcnow_iso()
+        mine = bool(self.task_id) and not fields.get("owner")  # found while working a task: it's the AI's to do
+        if mine:
+            fields = dict(fields, owner=worker.OWNER, owner_is_me=False)
         task = {"title": title[:200], "detail": "", "owner": "", "owner_is_me": True, "due": "", "priority": "medium",
                 "status": "todo", "project_id": "", **{k: v for k, v in fields.items() if k in _TASK_FIELDS},
                 "origin": "assistant", "user_edited": False, "created_at": now, "updated_at": now}
-        return {"task": self.store.save_task(pysecrets.token_hex(10), task)}
+        saved = self.store.save_task(pysecrets.token_hex(10), task)
+        if mine and self.starter:
+            return {"task": saved, **self._start(saved)}
+        return {"task": saved}
 
     def _t_start_task(self, task_id):
         task = self.store.get_task(task_id)
@@ -365,15 +374,21 @@ class Toolset:
             return {"error": "no such task"}
         if task.get("status") == "done":
             return {"error": "that task is already done; reopen it (update_task status todo) first"}
-        self.store.save_task(task_id, {"owner": "Assistant", "owner_is_me": False, "updated_at": utcnow_iso()})
+        self.store.save_task(task_id, {"owner": worker.OWNER, "owner_is_me": False, "updated_at": utcnow_iso()})
+        return {"title": task.get("title", ""), **self._start(task)}
+
+    def _start(self, task):
+        """Start working a task in the background, unless it already is (or was just started) or enough are."""
+        now = time.time()
+        if worker._busy(task, datetime.now(timezone.utc)) or now - _started.get(task["id"], 0) < 120:
+            return {"started": True, "note": "It's being worked already."}
         if worker.busy_count(self.store) >= worker.MAX_PARALLEL:
-            return {"queued": True, "title": task.get("title", ""),
-                    "note": f"{worker.MAX_PARALLEL} tasks are being worked already; it's yours now and the next hourly "
-                            "run starts it."}
-        self.starter(task_id)
-        return {"started": True, "title": task.get("title", ""),
-                "note": "Working in the background now; it continues after this conversation ends. Tell them they "
-                        "can watch it on the Progress tab (工作進度)."}
+            return {"queued": True, "note": f"{worker.MAX_PARALLEL} tasks are being worked already; it's yours now "
+                                            "and the next hourly run starts it."}
+        _started[task["id"]] = now
+        self.starter(task["id"])
+        return {"started": True, "note": "Working in the background now; it continues after this conversation ends. "
+                                         "Tell them they can watch it on the Progress tab (工作進度)."}
 
     def _t_update_task(self, task_id, **fields):
         if not self.store.get_task(task_id):
@@ -630,6 +645,7 @@ class Toolset:
         return {"partner": partner, "answer": self.consult(partner, request)}
 
 
+_started = {}  # task id -> when this process last started it, so a task isn't started twice in a row
 _browser_sessions = {}  # tab -> {"id", "at"}: one browser tab per partner, and per task being worked, kept 10 minutes
 _browser_token = {"value": "", "at": 0}
 _browser_token_lock = threading.Lock()

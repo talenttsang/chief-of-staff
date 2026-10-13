@@ -14,6 +14,7 @@ Routes
   POST /api/run          run now (from the UI)
   POST /run              hourly run (Cloud Scheduler, X-Run-Token header)
   POST /work/<id>        work one task in the background (the app calling itself for start_task, X-Run-Token)
+  POST /watchdog         restart tasks whose work was cut off (Cloud Scheduler every 5 minutes, X-Run-Token)
   GET  /api/steps        the AI's work log, step by step (the Progress tab)
 
 Sign-in is one shared password, kept in Secret Manager (chat-assistant-password); there is no Google
@@ -790,6 +791,10 @@ def do_run(trigger):
         summary["trigger"] = trigger
         progress.phase("處理 Talent Solutions AI 自己的任務")
         try:
+            worker.resume_interrupted(store, start_task_work)
+        except Exception as exc:  # noqa: BLE001
+            summary["errors"].append({"space": "(interrupted tasks)", "error": str(exc)[:300]})
+        try:
             summary["tasks_worked"] = worker.work_due(talk_service(), store)
         except Exception as exc:  # noqa: BLE001 - the connection check below still runs
             summary["errors"].append({"space": "(assistant's tasks)", "error": str(exc)[:300]})
@@ -839,10 +844,22 @@ def api_steps():
     return jsonify(steps=store.list_steps(150), working=working)
 
 
+def run_token_ok():
+    expected = secret_store.get(RUN_TOKEN_SECRET_ID) or ""
+    return bool(expected) and hmac.compare_digest(request.headers.get("X-Run-Token", ""), expected)
+
+
+@app.post("/watchdog")
+def watchdog():
+    """A deploy replaces the server and cuts off work in progress; this finds such tasks and starts them again."""
+    if not run_token_ok():
+        return jsonify(error="forbidden"), 403
+    return jsonify(resumed=worker.resume_interrupted(store, start_task_work))
+
+
 @app.post("/work/<task_id>")
 def background_work(task_id):
-    expected = secret_store.get(RUN_TOKEN_SECRET_ID) or ""
-    if not expected or not hmac.compare_digest(request.headers.get("X-Run-Token", ""), expected):
+    if not run_token_ok():
         return jsonify(error="forbidden"), 403
     if not store.get_task(task_id):
         return jsonify(error="no such task"), 404
