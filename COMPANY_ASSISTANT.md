@@ -140,7 +140,9 @@ Each step is a heartbeat on its task; every 5 minutes Cloud Scheduler's `chat-as
 are told) and starts them again. Tasks worked side by side each have their own browser tab.
 
 Problems it finds while working (a bug, an error, a step a user can't get past) go on the board as their own
-tasks, with the steps to reproduce; a task it adds while working is its own and starts at once: working such a task means finding the code,
+tasks, with the steps to reproduce; a task it adds while working is its own and starts at once. When it's
+stuck it first finds out why from the code (search_code, read_code) and the data (query_database); a limit of its
+own browser becomes a task to fix the tool in src/browser, which the deploy workflow ships when it changes: working such a task means finding the code,
 fixing it with `commit_code`, checking the deploy and testing again. Trouble with its own browser isn't filed.
 
 **工作進度 (Progress tab)** shows every step as it happens: each tool call (a short summary, never file
@@ -246,7 +248,8 @@ details, card or bank details or pay (HelperXpress's Stripe is live: it stops at
 sites never to place orders or send a form without your OK. That rule is an instruction; the technical blocks are
 the ones listed above (no typing into password or payment-card fields).
 
-Deploy:
+Deploy: the workflow deploys it on every push to main that changes `src/browser/` (it keeps its settings). The
+first time, by hand:
 
     gcloud run deploy web-browser --source src/browser --region us-central1 --project helperexpress-hk --service-account web-browser@helperexpress-hk.iam.gserviceaccount.com --no-allow-unauthenticated --memory 2Gi --cpu 2 --concurrency 8 --max-instances 1 --timeout 120
     gcloud run services add-iam-policy-binding web-browser --region us-central1 --project helperexpress-hk --member serviceAccount:chat-assistant@helperexpress-hk.iam.gserviceaccount.com --role roles/run.invoker

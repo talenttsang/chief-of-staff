@@ -1,4 +1,5 @@
-# Every push to main is tested, then deployed to Cloud Run (chat-assistant, us-central1).
+# Every push to main is tested, then deployed to Cloud Run (chat-assistant, us-central1); the browser service
+# (web-browser) is deployed too when src/browser changed.
 # GitHub signs in to Google as github-deploy@helperexpress-hk through Workload Identity Federation:
 # no key is stored here, and only main of this repository may sign in.
 name: Deploy to Cloud Run
@@ -24,7 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r src/cloud_run/requirements.txt
+      - run: pip install -r src/cloud_run/requirements.txt -r src/browser/requirements.txt
+      - run: python -m playwright install --with-deps chromium  # the browser service's tests run a real browser
       - run: python -m unittest discover -s tests
 
   deploy:
@@ -32,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # to see whether this push changed the browser service
       - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: projects/943501248136/locations/global/workloadIdentityPools/github/providers/github
@@ -44,3 +48,13 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' https://chat-assistant-f2n7veewpa-uc.a.run.app/health)
           echo "/health answered $code"
           test "$code" = 200
+      - name: Deploy the browser service, if it changed
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = push ] && git cat-file -e "$BEFORE" 2>/dev/null \
+              && git diff --quiet "$BEFORE" "$GITHUB_SHA" -- src/browser; then
+            echo "src/browser unchanged: web-browser stays as it is"
+          else
+            gcloud run deploy web-browser --source src/browser --region us-central1 --project helperexpress-hk --quiet
+          fi

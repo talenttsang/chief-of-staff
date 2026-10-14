@@ -29,6 +29,9 @@ gcloud projects add-iam-policy-binding $PROJECT --member serviceAccount:$SA --ro
 # Lets the deployer deploy the service to run as this account.
 gcloud iam service-accounts add-iam-policy-binding $SA --project $PROJECT \
   --member serviceAccount:$DEPLOYER --role roles/iam.serviceAccountUser --quiet >/dev/null
+# ... and the browser service (web-browser) as its own account, when src/browser changes.
+gcloud iam service-accounts add-iam-policy-binding web-browser@$PROJECT.iam.gserviceaccount.com --project $PROJECT \
+  --member serviceAccount:$DEPLOYER --role roles/iam.serviceAccountUser --quiet >/dev/null 2>&1 || true
 
 for s in chat-assistant-password chat-assistant-oauth-client chat-assistant-user-token chat-assistant-run-token; do
   gcloud secrets describe $s --project $SECRETS_PROJECT >/dev/null 2>&1 \

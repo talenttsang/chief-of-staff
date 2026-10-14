@@ -884,6 +884,8 @@ class ResearchAndWorkTests(unittest.TestCase):
 
         self.assertIn("create_task", worker.PROMPT)
         self.assertIn("starts at once", worker.PROMPT)
+        self.assertIn("don't stop and ask:\nfind out why", worker.PROMPT)  # stuck: read the code and the data first
+        self.assertIn("query_database", worker.PROMPT)
         self.assertIn("commit_code", worker.PROMPT)
         self.store.save_task("t1", {"title": "E2E", "status": "todo", "owner": "Assistant"})
         fake = FakePartner("Found a bug.")

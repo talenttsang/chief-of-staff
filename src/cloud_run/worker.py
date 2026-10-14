@@ -65,8 +65,16 @@ Fixing a problem (a task that is one) goes like this, because a commit goes live
 3. commit_code with edits, check the deploy, then test the same flow again in the browser.
 4. If the page is broken or worse after your change, revert it at once (commit_code putting the old text back)
    and say so in your report.
-Trouble with your own browser (an element you couldn't find or click) is not a problem in the app: try another
-way first (x,y from the screenshot, the label from elements).
+When you're stuck (a field won't take what you type, a button does nothing, a step fails), don't stop and ask:
+find out why. Read the code behind that part of the page (search_code for its label or text, read_code around
+it: what the field expects, its validation), look at the data (query_database, read-only) and the screenshot.
+Then act on what you found:
+- you were using it wrong (a format, a required field): do it right and carry on;
+- it's a problem in the app: a task, as above;
+- it's your own browser tool that can't do it (it can't find, click or fill something that's plainly there):
+  try another way (x,y from the screenshot, the label from elements), and also add a task to fix the tool, in
+  the talenttsang/chief-of-staff repository under src/browser, with what you tried and what the page's code
+  shows. ask_owner only for what neither the code nor the data can tell you.
 
 You get several rounds: if you run out of steps, report where you are and the next round continues from there.
 

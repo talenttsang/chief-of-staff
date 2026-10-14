@@ -64,8 +64,9 @@ one secret at a time, never project-wide, and Firestore access only to the
 
 ## Deploying
 
-Every push to `main` deploys: `.github/workflows/deploy.yml` runs the tests, then
-`gcloud run deploy` as `github-deploy@helperexpress-hk` (Workload Identity
+Every push to `main` deploys: `.github/workflows/deploy.yml` runs the tests (the browser's
+with a real Chromium), then `gcloud run deploy` of `chat-assistant`, and of `web-browser` when
+`src/browser/` changed, as `github-deploy@helperexpress-hk` (Workload Identity
 Federation, `main` only). Talent Solutions AI commits to `main` itself
 (`commit_code`, see COMPANY_ASSISTANT.md), so `main` can move under you: pull
 before you work. By hand, from the repo root (Cloud Shell or any machine with
