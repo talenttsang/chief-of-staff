@@ -59,6 +59,19 @@
       box-shadow: var(--shadow); cursor: pointer; position: relative; }
     .card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
     .card .title { font-weight: 500; margin-right: 26px; overflow-wrap: anywhere; }
+    /* What the AI is doing on a task, step by step, as in Claude Code. */
+    .trail { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 12px; line-height: 1.45; }
+    .trail .tl { display: flex; gap: 6px; align-items: baseline; color: var(--muted); }
+    .trail .tl .dot { color: var(--good, #067647); flex: none; width: 12px; text-align: center; }
+    .trail .tl.bad .dot, .trail .tl .err { color: var(--bad, #b42318); }
+    .trail .tl.mark { color: var(--text); font-weight: 500; }
+    .trail .tl b { color: var(--text); font-weight: 600; white-space: nowrap; }
+    .trail .tl .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .trail .tl .err { display: block; padding-left: 18px; white-space: normal; }
+    .trail .tl.now .dot { animation: blink 1.2s infinite; }
+    .trail.full { max-height: 340px; overflow: auto; margin: 10px 0; }
+    .trail.full .tl .what { white-space: normal; overflow-wrap: anywhere; }
+    .trail .when { margin-left: auto; padding-left: 8px; flex: none; font-variant-numeric: tabular-nums; }
     .card .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--muted); align-items: center; }
     .card .body { color: var(--muted); font-size: 13px; margin-top: 6px; overflow-wrap: anywhere; }
     .chip { padding: 1px 8px; border-radius: 10px; background: var(--panel-2); }
@@ -356,6 +369,7 @@
     <label class="check"><input type="checkbox" name="owner_is_me"> 這是我的</label>
     <div id="taskSource" class="why"></div>
     <div id="taskResult" class="report" hidden></div>
+    <div id="taskSteps" class="trail full" hidden></div>
     <div class="dialog-foot">
       <button type="button" class="btn danger left" id="deleteTask">刪除</button>
       <button type="button" class="btn" id="cancelTask">取消</button>

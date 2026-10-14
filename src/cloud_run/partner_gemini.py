@@ -70,7 +70,7 @@ def respond(system, history, toolset, secrets=None, model=None):
         calls = [p["functionCall"] for p in parts if p.get("functionCall")]
         if not calls:
             text = "".join(p.get("text", "") for p in parts if p.get("text") and not p.get("thought")).strip()
-            return {"text": text or "(no answer)", "tools": toolset.log}
+            return {"text": text or "（沒有回覆）", "tools": toolset.log}
         body["contents"].append({"role": "model", "parts": parts})
         responses = []
         for call in calls:
@@ -83,7 +83,7 @@ def respond(system, history, toolset, secrets=None, model=None):
         responses += [{"inlineData": {"mimeType": i["mime"], "data": i["data"]}}
                       for i in getattr(toolset, "take_images", lambda: [])()]
         body["contents"].append({"role": "user", "parts": responses})
-    return {"text": "I ran out of steps on that one. Ask me to continue.", "tools": toolset.log}
+    return {"text": "這一輪的步驟用完了，叫我繼續就會接着做。", "tools": toolset.log}
 
 
 def describe_image(data, instruction):

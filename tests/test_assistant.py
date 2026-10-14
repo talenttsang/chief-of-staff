@@ -74,6 +74,11 @@ class WebTests(unittest.TestCase):
         body = self.call("GET", "/api/steps").get_json()
         self.assertEqual(body["steps"][0]["tool"], "browser")
         self.assertEqual([w["id"] for w in body["working"]], ["t1"])
+        self.store.add_step({"tool": "task_started", "task_id": "t1", "at": "2026-10-14T01:00:00+00:00"})
+        self.store.add_step({"tool": "read_code", "task_id": "t1", "at": "2026-10-14T01:00:05+00:00"})
+        self.store.add_step({"tool": "browser", "task_id": "other", "at": "2026-10-14T01:00:03+00:00"})
+        mine = self.call("GET", "/api/steps?task=t1").get_json()["steps"]
+        self.assertEqual([s["tool"] for s in mine], ["task_started", "read_code"])  # only that task's, oldest first
 
     def test_signed_out(self):
         self.assertEqual(self.call("GET", "/api/state").status_code, 401)

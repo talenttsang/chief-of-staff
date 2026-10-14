@@ -491,6 +491,7 @@ function taskCard(t) {
       onclick: () => openTask(t), onkeydown: (e) => { if (e.key === "Enter") openTask(t); } },
     el("div", { class: "title" }, t.title), meta,
     t.space_label ? el("div", { class: "src", title: t.source_excerpt || "" }, where(t)) : null);
+  if (working(t)) card.append(el("div", { class: "trail", "data-task": t.id, "aria-live": "polite" }, ...trailLines(t.id, 5)));
   if (next) card.append(el("button", { class: "advance", title: next === "done" ? "標示為完成" : "開始", "aria-label": next === "done" ? "標示為完成" : "開始",
     onclick: (e) => { e.stopPropagation(); updateTask(t.id, { status: next }).catch((err) => toast(err.message)); } }, next === "done" ? "✓" : "→"));
   return card;
@@ -515,6 +516,41 @@ function renderBoard() {
 
 // The assistant is on it: marked when work starts, cleared when it reports (15 min cap, as on the server).
 const working = (t) => !!t.working_since && Date.now() - new Date(t.working_since).getTime() < 15 * 60 * 1000;
+
+// -- the steps the AI is taking on a task, shown on its card and in its dialog (like Claude Code) ------------------
+function stepLine(s, now = false, full = false) {
+  const mark = MARKS.has(s.tool);
+  const detail = String(s.detail || "").replace(/\s+/g, " ");
+  return el("div", { class: `tl${s.ok === false ? " bad" : ""}${mark ? " mark" : ""}${now ? " now" : ""}`, title: detail },
+    el("span", { class: "dot" }, s.ok === false ? "✕" : mark ? "◆" : "⏺"),
+    el("span", { class: "what" }, el("b", {}, STEP_LABEL[s.tool] || s.tool), detail ? ` ${detail.slice(0, full ? 400 : 90)}` : "",
+      s.error ? el("span", { class: "err" }, `⎿ ${String(s.error).slice(0, full ? 300 : 90)}`) : null),
+    full ? el("span", { class: "when" }, new Date(s.at).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })) : null);
+}
+
+function trailLines(taskId, last) {
+  const steps = (stepsData.steps || []).filter((s) => s.task_id === taskId).reverse().slice(-last);  // oldest first
+  if (!steps.length) return [el("div", { class: "tl now" }, el("span", { class: "dot" }, "⏺"), el("span", { class: "what" }, "開始中…"))];
+  return steps.map((s, i) => stepLine(s, i === steps.length - 1));
+}
+
+function renderTrails() {
+  for (const box of document.querySelectorAll(".card .trail[data-task]")) box.replaceChildren(...trailLines(box.dataset.task, 5));
+}
+
+let dialogSteps = [];
+async function loadTaskSteps(t) {
+  const box = $("taskSteps");
+  if (!t) { box.hidden = true; return; }
+  try { dialogSteps = (await api("GET", `/api/steps?task=${encodeURIComponent(t.id)}`)).steps || []; } catch { return; }
+  if (editing?.id !== t.id) return;
+  box.hidden = !dialogSteps.length;
+  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+  box.replaceChildren(el("div", { class: "tl mark" }, el("span", { class: "dot" }, "☰"),
+    el("span", { class: "what" }, `工作步驟（${dialogSteps.length}）`)),
+    ...dialogSteps.map((s, i) => stepLine(s, working(t) && i === dialogSteps.length - 1, true)));
+  if (atEnd) box.scrollTop = box.scrollHeight;  // follow the newest step, unless the reader scrolled up
+}
 
 function showTaskReport(t) {
   const box = $("taskResult");
@@ -557,6 +593,7 @@ function openTask(t) {
   $("deleteTask").hidden = !t;
   $("workTask").hidden = !t || t.status === "done";
   showTaskReport(t);
+  $("taskSteps").hidden = true; loadTaskSteps(t);
   const src = $("taskSource"); src.replaceChildren();
   if (t && t.space_label) {
     src.append(`來自 ${where(t)}${t.source_excerpt ? `：「${t.source_excerpt}」 ` : " "}`);
@@ -996,8 +1033,20 @@ renderNotifyButton();
 let stepsTimer = null;
 async function pollSteps() {
   clearTimeout(stepsTimer);
-  try { stepsData = await api("GET", "/api/steps"); renderSteps(); announceStops(stepsData.steps); } catch { /* next time */ }
-  const watching = !$("view-steps").hidden && document.visibilityState === "visible";
+  try {
+    stepsData = await api("GET", "/api/steps"); renderSteps(); announceStops(stepsData.steps);
+    // A task the AI started elsewhere (a chat, a call, another task) shows as being worked at once.
+    const busy = new Map((stepsData.working || []).map((w) => [w.id, w.since]));
+    const fresh = state?.tasks?.filter((t) => busy.has(t.id) && !working(t)) || [];
+    if (fresh.length) {
+      state.tasks = state.tasks.map((t) => (busy.has(t.id) ? { ...t, working_since: busy.get(t.id) } : t));
+      renderBoard();
+    } else renderTrails();
+    if ($("taskDialog").open && editing && (busy.has(editing.id) || working(editing))) loadTaskSteps(editing);
+  } catch { /* next time */ }
+  const busyNow = (stepsData.working || []).length > 0;
+  const watching = document.visibilityState === "visible" &&
+    (!$("view-steps").hidden || (busyNow && (!$("view-board").hidden || $("taskDialog").open)));
   stepsTimer = setTimeout(pollSteps, watching ? 3000 : 20000);  // every 3 s while watched; else just the badge
 }
 

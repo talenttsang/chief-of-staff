@@ -152,7 +152,7 @@ def respond(system, history, toolset, secrets=None, model=None):
             tool_uses = [b for b in content if b.type == "tool_use"]
             if response.stop_reason != "tool_use" or not tool_uses:
                 suffix = " (cut off: the answer hit the length limit)" if response.stop_reason == "max_tokens" else ""
-                return {"text": (_text(content) or "(no answer)") + suffix, "tools": toolset.log}
+                return {"text": (_text(content) or "（沒有回覆）") + suffix, "tools": toolset.log}
 
             messages.append({"role": "assistant", "content": content})
             results = []
@@ -167,7 +167,7 @@ def respond(system, history, toolset, secrets=None, model=None):
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": content,
                                 "is_error": "error" in result})
             messages.append({"role": "user", "content": results})  # all results in one message
-    return {"text": "I ran out of steps on that one. Ask me to continue.", "tools": toolset.log}
+    return {"text": "這一輪的步驟用完了，叫我繼續就會接着做。", "tools": toolset.log}
 
 
 def ping(secrets=None):

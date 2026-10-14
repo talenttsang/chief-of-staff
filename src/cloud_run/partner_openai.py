@@ -39,7 +39,7 @@ def respond(system, history, toolset, secrets=None, model=None):
         choice = client.chat.completions.create(**kwargs).choices[0]
         message = choice.message
         if not message.tool_calls:
-            return {"text": (message.content or "(no answer)").strip(), "tools": toolset.log}
+            return {"text": (message.content or "（沒有回覆）").strip(), "tools": toolset.log}
         messages.append(message.model_dump(exclude_none=True))
         images = []
         for call in message.tool_calls:
@@ -56,7 +56,7 @@ def respond(system, history, toolset, secrets=None, model=None):
             messages.append({"role": "user", "content": [
                 {"type": "text", "text": "(Screenshots from the browser tool calls above.)"}] + [
                 {"type": "image_url", "image_url": {"url": f"data:{i['mime']};base64,{i['data']}"}} for i in images]})
-    return {"text": "I ran out of steps on that one. Ask me to continue.", "tools": toolset.log}
+    return {"text": "這一輪的步驟用完了，叫我繼續就會接着做。", "tools": toolset.log}
 
 
 def ping(secrets=None, model=None):

@@ -252,6 +252,11 @@ class MemoryStore:
     def list_steps(self, limit=150):
         return sorted(self._list("chat_assistant_steps"), key=lambda s: s.get("at", ""), reverse=True)[:limit]
 
+    def list_task_steps(self, task_id, limit=400):
+        """One task's steps, oldest first: what the AI did on it, step by step."""
+        steps = [s for s in self._list("chat_assistant_steps") if s.get("task_id") == task_id]
+        return sorted(steps, key=lambda s: s.get("at", ""))[-limit:]
+
     def prune_steps(self, before):
         for step in self._list("chat_assistant_steps"):
             if step.get("at", "") < before:
@@ -294,6 +299,11 @@ class FirestoreStore(MemoryStore):
         q = (self._db.collection("chat_assistant_steps")
              .order_by("at", direction=self._fs.Query.DESCENDING).limit(limit))
         return [dict(s.to_dict(), id=s.id) for s in q.stream()]
+
+    def list_task_steps(self, task_id, limit=400):
+        # Equality only, so no composite index is needed; sorted here. A week of one task's steps fits.
+        q = self._db.collection("chat_assistant_steps").where(filter=self._fs.FieldFilter("task_id", "==", task_id)).limit(2000)
+        return sorted((dict(s.to_dict(), id=s.id) for s in q.stream()), key=lambda s: s.get("at", ""))[-limit:]
 
     def prune_steps(self, before):
         q = self._db.collection("chat_assistant_steps").where(filter=self._fs.FieldFilter("at", "<", before)).limit(400)

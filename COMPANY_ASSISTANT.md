@@ -145,6 +145,9 @@ stuck it first finds out why from the code (search_code, read_code) and the data
 own browser becomes a task to fix the tool in src/browser, which the deploy workflow ships when it changes: working such a task means finding the code,
 fixing it with `commit_code`, checking the deploy and testing again. Trouble with its own browser isn't filed.
 
+A task being worked shows its last five steps on its card, updating every few seconds (like Claude Code), and
+the task dialog lists all of its steps with their times (`GET /api/steps?task=<id>`).
+
 **工作進度 (Progress tab)** shows every step as it happens: each tool call (a short summary, never file
 contents), and each task started, reported on, finished, paused or failed, with who did it (typed, on a call, or
 working a task). It refreshes every 3 seconds while open, and the tab shows 工作中 whenever a task is being worked.

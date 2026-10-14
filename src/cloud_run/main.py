@@ -885,7 +885,10 @@ def api_browser():
 
 @app.get("/api/steps")
 def api_steps():
-    """The work log and what the AI is working on now; the Progress tab polls it."""
+    """The work log and what the AI is working on now; the Progress tab and the board poll it. ?task=<id> gives
+    that task's steps, oldest first (the task dialog)."""
+    if request.args.get("task"):
+        return jsonify(steps=store.list_task_steps(request.args["task"][:64]))
     now = datetime.now(timezone.utc)
     working = [{"id": t["id"], "title": t.get("title", ""), "since": t["working_since"]}
                for t in store.list_tasks() if worker._busy(t, now)]
