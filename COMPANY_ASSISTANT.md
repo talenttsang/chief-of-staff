@@ -103,6 +103,14 @@ conversation history; the line reads Claude's answer out word for word. The line
 given the businesses' names and terms so they reach Claude spelled right. On
 Gemini's line a turn ends after a 1.5 s pause (`RELAY_END_SILENCE_MS`).
 
+## Photos in the chat
+
+The 📷 button in the chat (or pasting or dropping a picture on it) adds up to 4 photos to a message. The page
+shrinks each to at most 1600 pixels a side as a JPEG before sending; the server keeps each photo as its own
+document (`chat_assistant_images`, pruned after 30 days by the hourly run) and the turn lists their ids. Every
+partner sees the photos with the message, and with the next few messages, so follow-up questions about a photo
+work. Photos are served only to signed-in pages (`GET /api/images/<id>`).
+
 ## Working on its own
 
 Every partner is told to use its access before answering: look things up in the

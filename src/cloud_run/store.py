@@ -12,6 +12,7 @@ Firestore layout (database FIRESTORE_DATABASE, collections prefixed chat_assista
   chat_assistant_actions/{id}  changes made in systems and databases
   chat_assistant_runs/{id}     one summary per hourly run
   chat_assistant_steps/{id}    the AI's work log, step by step (the Progress tab); a week is kept
+  chat_assistant_images/{id}   photos sent in the chat (base64, shrunk by the page); 30 days are kept
 """
 
 import copy
@@ -230,6 +231,18 @@ class MemoryStore:
     def list_runs(self, limit=20):
         return sorted(self._list("chat_assistant_runs"), key=lambda r: r.get("started_at", ""), reverse=True)[:limit]
 
+    # -- photos sent in the chat: one document each, so a conversation stays small -------------------------
+    def save_image(self, image_id, image):
+        self._set("chat_assistant_images", image_id, dict(image, at=image.get("at") or utcnow_iso()))
+
+    def get_image(self, image_id):
+        return self._get("chat_assistant_images", image_id)
+
+    def prune_images(self, before):
+        for image in self._list("chat_assistant_images"):
+            if image.get("at", "") < before:
+                self._delete("chat_assistant_images", image["id"])
+
     # -- the work log: every step the AI takes, so people can see it working ------------------------------
     def add_step(self, step):
         at = step.get("at") or utcnow_iso()
@@ -284,6 +297,11 @@ class FirestoreStore(MemoryStore):
 
     def prune_steps(self, before):
         q = self._db.collection("chat_assistant_steps").where(filter=self._fs.FieldFilter("at", "<", before)).limit(400)
+        for snap in q.stream():
+            snap.reference.delete()
+
+    def prune_images(self, before):
+        q = self._db.collection("chat_assistant_images").where(filter=self._fs.FieldFilter("at", "<", before)).limit(200)
         for snap in q.stream():
             snap.reference.delete()
 

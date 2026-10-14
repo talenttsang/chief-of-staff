@@ -129,7 +129,10 @@ def respond(system, history, toolset, secrets=None, model=None):
 
     tools = [{"name": s["name"], "description": s["description"], "input_schema": s["parameters"]}
              for s in toolset.specs()]
-    messages = [{"role": t["role"], "content": t["text"]} for t in history if t.get("text")]
+    messages = [{"role": t["role"], "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": i["mime"], "data": i["data"]}}
+                    for i in t["images"]] + [{"type": "text", "text": t["text"]}] if t.get("images") else t["text"]}
+                for t in history if t.get("text")]
     system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
     state = anthropic.BetaFallbackState()  # one per conversation: pins follow-ups to the model that accepted
     with state:

@@ -164,24 +164,49 @@ class Talk:
                        consult=self.consult_fn(partner), images=(not voice) if images is None else images,
                        starter=self.starter)
 
-    def ask(self, partner, message, voice=False):
+    def ask(self, partner, message, voice=False, images=()):
+        """One turn of the conversation. `images` ([{mime, data (base64)}]) are photos sent with it: each is kept
+        on its own (store.save_image) and the turn lists their ids."""
+        import secrets as pysecrets
+
         if partner not in PARTNERS:
             raise ValueError(f"unknown partner {partner}")
         ok, why = self.partner_status(partner)
         if not ok:
             raise RuntimeError(f"{PARTNERS[partner].LABEL} 暫時無法使用：{why}")
         history = [t for t in self.store.get_talk(partner) if t.get("role") in ("user", "assistant")][-24:]
-        user_turn = {"role": "user", "text": message.strip()[:8000], "at": utcnow_iso()}
+        user_turn = {"role": "user", "text": message.strip()[:8000] or "（相片）", "at": utcnow_iso()}
+        if images:
+            user_turn["images"] = []
+            for image in images:
+                image_id = pysecrets.token_hex(10)
+                self.store.save_image(image_id, {"mime": image["mime"], "data": image["data"], "partner": partner})
+                user_turn["images"].append(image_id)
         toolset = self.toolset(partner, voice=voice, images=True)  # typed, or the voice relay's typed answer
         prompt = system_prompt(self.store, partner, voice=voice, owner_email=self.owner_email,
                                relayed=voice and partner != "assistant")  # ask(voice=True) is the voice relay
-        result = PARTNERS[partner].respond(prompt,
-                                           history + [user_turn], toolset, self.secrets, self._model(partner))
+        result = PARTNERS[partner].respond(prompt, self._with_images(history + [user_turn]), toolset, self.secrets,
+                                           self._model(partner))
         reply = {"role": "assistant", "text": to_hk(result["text"]), "at": utcnow_iso(), "tools": result.get("tools", [])}
         if voice:
             user_turn["voice"] = reply["voice"] = True
         self.store.append_talk(partner, [user_turn, reply])
         return reply
+
+    def _with_images(self, turns, recent=6, most=6):
+        """The turns for the model, with the photos of the last few turns attached (newest first, at most `most`):
+        a follow-up question about a photo still sees it."""
+        out, left = [dict(t) for t in turns], most
+        for turn in reversed(out[-recent:]):
+            ids, turn["images"] = turn.get("images") or [], []
+            for image_id in ids[:left]:
+                image = self.store.get_image(image_id)
+                if image:
+                    turn["images"].append({"mime": image["mime"], "data": image["data"]})
+            left -= len(turn["images"])
+        for turn in out[:-recent]:
+            turn.pop("images", None)
+        return out
 
     def digest_answer(self, question, answer):
         """Fold an answer from the Questions tab into the knowledge base using the assistant's tools."""

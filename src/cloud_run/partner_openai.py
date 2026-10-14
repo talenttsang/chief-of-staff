@@ -27,7 +27,10 @@ def respond(system, history, toolset, secrets=None, model=None):
     tools = [{"type": "function", "function": {"name": s["name"], "description": s["description"],
                                                "parameters": s["parameters"]}} for s in toolset.specs()]
     messages = [{"role": "system", "content": system}]
-    messages += [{"role": t["role"], "content": t["text"]} for t in history if t.get("text")]
+    messages += [{"role": t["role"], "content": [{"type": "text", "text": t["text"]}] + [
+                      {"type": "image_url", "image_url": {"url": f"data:{i['mime']};base64,{i['data']}"}}
+                      for i in t["images"]] if t.get("images") else t["text"]}
+                 for t in history if t.get("text")]
 
     for _ in range(MAX_STEPS):
         kwargs = {"model": model or OPENAI_MODEL, "messages": messages}

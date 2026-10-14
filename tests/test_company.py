@@ -803,7 +803,7 @@ class ResearchAndWorkTests(unittest.TestCase):
         self.assertIn("update_task", saved["work_tools"])
         said = self.store.get_talk("assistant")[-1]
         self.assertEqual(said["task_id"], "t1")
-        self.assertIn("(done)", said["text"])
+        self.assertIn("（已完成）", said["text"])
 
     def test_the_hourly_run_picks_only_the_assistants_open_tasks(self):
         import worker
@@ -1206,6 +1206,41 @@ class WebTests(unittest.TestCase):
 
     def call(self, method, path, body=None):
         return self.client.open(path, method=method, json=body, headers={"X-Chat-Assistant": "1"})
+
+    def test_photos_sent_in_the_chat(self):
+        import base64
+
+        png = base64.b64encode(b"\x89PNG fake photo").decode()
+        r = self.call("POST", "/api/talk/assistant", {"message": "", "images": [{"mime": "image/png", "data": png}]})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        turn = self.store.get_talk("assistant")[-2]
+        self.assertEqual((turn["text"], len(turn["images"])), ("（相片）", 1))
+        sent = self.fake["assistant"].calls[-1]["history"][-1]
+        self.assertEqual(sent["images"], [{"mime": "image/png", "data": png}])  # the model sees the photo
+        photo = self.client.get(f"/api/images/{turn['images'][0]}")
+        self.assertEqual((photo.status_code, photo.mimetype, photo.data), (200, "image/png", b"\x89PNG fake photo"))
+        self.assertEqual(self.client.get("/api/images/../../etc").status_code, 404)
+
+        self.call("POST", "/api/talk/assistant", {"message": "那第二個問題呢？"})  # a follow-up still sees the photo
+        self.assertEqual(len(self.fake["assistant"].calls[-1]["history"][-3]["images"]), 1)
+
+        too_many = [{"mime": "image/png", "data": png}] * 5
+        self.assertEqual(self.call("POST", "/api/talk/assistant", {"message": "x", "images": too_many}).status_code, 400)
+        pdf = [{"mime": "application/pdf", "data": png}]
+        self.assertEqual(self.call("POST", "/api/talk/assistant", {"message": "x", "images": pdf}).status_code, 400)
+        huge = [{"mime": "image/jpeg", "data": base64.b64encode(b"x" * 800_000).decode()}]
+        self.assertIn("太大", self.call("POST", "/api/talk/assistant", {"message": "x", "images": huge}).get_json()["error"])
+
+    def test_photos_need_sign_in(self):
+        signed_out = self.main.app.test_client()
+        self.assertEqual(signed_out.get("/api/images/0123456789abcdef0123").status_code, 401)
+
+    def test_old_photos_are_pruned(self):
+        self.store.save_image("old", {"mime": "image/png", "data": "UE5H", "at": "2026-01-01T00:00:00+00:00"})
+        self.store.save_image("new", {"mime": "image/png", "data": "UE5H"})
+        self.store.prune_images("2026-06-01T00:00:00+00:00")
+        self.assertIsNone(self.store.get_image("old"))
+        self.assertIsNotNone(self.store.get_image("new"))
 
     def test_knowledge_endpoint(self):
         data = self.call("GET", "/api/knowledge").get_json()

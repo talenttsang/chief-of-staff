@@ -184,5 +184,56 @@ class ImagesReachEachModelTests(unittest.TestCase):
         self.assertEqual(parts[1]["inlineData"], {"mimeType": "image/jpeg", "data": "SU1BR0U="})
 
 
+class SentPhotoTests(unittest.TestCase):
+    """A photo sent in the chat reaches each model with the message it came with."""
+
+    TURN = [{"role": "user", "text": "這張相片有甚麼問題？", "images": [{"mime": "image/png", "data": "UE5H"}]}]
+
+    def test_gemini(self):
+        import partner_gemini
+
+        sent = []
+
+        def post(url, headers=None, json=None, timeout=None):
+            sent.append(json)
+            return SimpleNamespace(status_code=200, json=lambda: {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]})
+
+        with mock.patch.object(partner_gemini, "_token", return_value="tok"), \
+                mock.patch.object(partner_gemini.requests, "post", side_effect=post):
+            partner_gemini.respond("sys", self.TURN, Toolset(MemoryStore(), None))
+        self.assertEqual(sent[0]["contents"][0]["parts"],
+                         [{"text": "這張相片有甚麼問題？"}, {"inlineData": {"mimeType": "image/png", "data": "UE5H"}}])
+
+    def test_claude(self):
+        import partner_claude
+
+        sent = []
+
+        def create(secrets, **kwargs):
+            sent.append(kwargs["messages"])
+            return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text="ok")])
+
+        with mock.patch.object(partner_claude, "_create", side_effect=create):
+            partner_claude.respond("sys", self.TURN, Toolset(MemoryStore(), None), MemorySecrets())
+        content = sent[0][0]["content"]
+        self.assertEqual(content[0], {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "UE5H"}})
+        self.assertEqual(content[1], {"type": "text", "text": "這張相片有甚麼問題？"})
+
+    def test_chatgpt(self):
+        import partner_openai
+
+        sent = []
+
+        def create(**kwargs):
+            sent.append(kwargs["messages"])
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None, content="ok"))])
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with mock.patch("openai.OpenAI", return_value=client):
+            partner_openai.respond("sys", self.TURN, Toolset(MemoryStore(), None), MemorySecrets({"CHATGPT_API_KEY": "k"}))
+        content = sent[0][1]["content"]
+        self.assertEqual(content[1], {"type": "image_url", "image_url": {"url": "data:image/png;base64,UE5H"}})
+
+
 if __name__ == "__main__":
     unittest.main()

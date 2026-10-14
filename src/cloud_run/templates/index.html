@@ -152,6 +152,14 @@
       padding: 2px 6px; margin-left: 6px; border-radius: 6px; vertical-align: middle; }
     .msg .spk:hover, .msg .spk.on { background: var(--accent-weak); color: var(--accent); }
     .composer { display: flex; gap: 8px; align-items: flex-end; }
+    .composer .photo { padding: 10px 11px; }
+    .attached { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .attached .thumb { position: relative; }
+    .attached img, .msg .photos img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
+    .attached .thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--bad, #b42318); color: #fff; cursor: pointer; line-height: 22px; padding: 0; }
+    .msg .photos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+    .msg .photos img { width: 120px; height: 120px; cursor: zoom-in; }
+    .chatwin.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
     .composer textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 180px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); resize: none; }
     .suggestions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: auto 0; }
     .suggestions button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); }
@@ -310,7 +318,10 @@
       <button class="btn" id="vmute">靜音</button>
       <button class="btn danger" id="vend">結束通話</button>
     </div>
+    <div class="attached" id="attached" hidden></div>
     <div class="composer" id="composer">
+      <button class="btn photo" id="addPhoto" title="加入相片（亦可貼上或拖放）" aria-label="加入相片">📷</button>
+      <input type="file" id="photoInput" accept="image/*" multiple hidden>
       <textarea id="message" placeholder="傳訊息給 Talent Solutions AI…" aria-label="訊息" title="按 Enter 傳送，Shift+Enter 換行"></textarea>
       <button class="btn mic" id="startVoice" title="即時通話">🎙 通話</button>
       <button class="btn primary" id="send">傳送</button>

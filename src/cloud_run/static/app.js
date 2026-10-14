@@ -201,7 +201,12 @@ function turnNode(t, live = false) {
     ? el("button", { class: "spk", title: "朗讀", "aria-label": "朗讀",
         onclick: (e) => speaker() && speaker().toggle(t.text, who, e.currentTarget) }, "🔊")
     : null;
-  return el("div", { class: `msg ${t.role}${live ? " live" : ""}` }, t.text,
+  const photos = (t.localImages || (t.images || []).map((id) => `/api/images/${encodeURIComponent(id)}`));
+  const shown = photos.length && t.text === "（相片）" ? "" : t.text;  // a photo sent without words
+  return el("div", { class: `msg ${t.role}${live ? " live" : ""}` },
+    photos.length ? el("div", { class: "photos" }, ...photos.map((src) =>
+      el("a", { href: src, target: "_blank", rel: "noopener" }, el("img", { src, alt: "相片", loading: "lazy" })))) : null,
+    shown,
     tools.length ? el("div", { class: "tools" }, `使用了：${[...new Set(tools)].join("、")}`) : null,
     t.at ? el("div", { class: "when" }, `${t.voice ? "🎙 " : ""}${ago(t.at)}`, readAloud) : readAloud);
 }
@@ -218,17 +223,69 @@ function renderThread(extra = []) {
   box.scrollTop = box.scrollHeight;
 }
 
+// -- photos: picked, pasted or dropped; shrunk here, then sent with the next message ----------------------------
+const MAX_PHOTOS = 4, PHOTO_SIDE = 1600, PHOTO_BYTES = 650_000;
+let attached = [];  // [{mime, data (base64), url (for the preview)}]
+
+async function shrink(file) {
+  // Big phone photos become a JPEG of at most PHOTO_SIDE pixels a side, small enough to send and keep.
+  const bitmap = await createImageBitmap(file);
+  for (const [side, quality] of [[PHOTO_SIDE, 0.85], [1280, 0.75], [1024, 0.65]]) {
+    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+    const canvas = Object.assign(document.createElement("canvas"),
+      { width: Math.round(bitmap.width * scale), height: Math.round(bitmap.height * scale) });
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const url = canvas.toDataURL("image/jpeg", quality);
+    const data = url.slice(url.indexOf(",") + 1);
+    if (data.length * 0.75 <= PHOTO_BYTES) return { mime: "image/jpeg", data, url };
+  }
+  throw new Error("相片太大");
+}
+
+async function addPhotos(files) {
+  for (const file of [...files].filter((f) => f.type.startsWith("image/"))) {
+    if (attached.length >= MAX_PHOTOS) { toast(`每則訊息最多 ${MAX_PHOTOS} 張相片。`); break; }
+    try { attached.push(await shrink(file)); } catch { toast(`無法讀取「${file.name || "相片"}」，請試另一張（JPEG 或 PNG）。`); }
+  }
+  renderAttached();
+}
+
+function renderAttached() {
+  $("attached").hidden = !attached.length;
+  $("attached").replaceChildren(...attached.map((p, i) => el("div", { class: "thumb" },
+    el("img", { src: p.url, alt: `相片 ${i + 1}` }),
+    el("button", { type: "button", title: "移除", "aria-label": "移除相片",
+      onclick: () => { attached.splice(i, 1); renderAttached(); } }, "×"))));
+}
+
+$("addPhoto").onclick = () => $("photoInput").click();
+$("photoInput").onchange = (e) => { addPhotos(e.target.files); e.target.value = ""; };
+$("message").addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.some((f) => f.type.startsWith("image/"))) { e.preventDefault(); addPhotos(files); }
+});
+for (const [type, on] of [["dragover", true], ["dragleave", false], ["drop", false]]) {
+  $("chat").addEventListener(type, (e) => {
+    if (![...(e.dataTransfer?.types || [])].includes("Files")) return;
+    e.preventDefault();
+    $("chat").classList.toggle("dropping", on);
+    if (type === "drop") addPhotos(e.dataTransfer.files);
+  });
+}
+
 async function sendMessage() {
   const text = $("message").value.trim();
-  if (!text || talkBusy) return;
+  if ((!text && !attached.length) || talkBusy) return;
   talkBusy = true; $("send").disabled = true;
   $("message").value = "";
-  const pending = { role: "user", text, at: new Date().toISOString() };
+  const photos = attached; attached = []; renderAttached();
+  const pending = { role: "user", text: text || "（相片）", at: new Date().toISOString(), localImages: photos.map((p) => p.url) };
   talkTurns.push(pending);
   renderThread([el("div", { class: "msg assistant live" }, el("span", { class: "spinner" }), " 思考中…")]);
   try {
     const asked = partner;
-    const { reply } = await api("POST", `/api/talk/${asked}`, { message: text });
+    const { reply } = await api("POST", `/api/talk/${asked}`,
+      { message: text, images: photos.map(({ mime, data }) => ({ mime, data })) });
     talkTurns.push(reply);
     renderThread();
     refreshKnowledge();
@@ -240,6 +297,7 @@ async function sendMessage() {
   } catch (e) {
     talkTurns.pop(); renderThread();
     $("message").value = text;
+    attached = photos; renderAttached();
     toast(e.message);
   } finally {
     talkBusy = false; $("send").disabled = false; $("message").focus();

@@ -156,7 +156,7 @@ def work_on(service, store, task_id, partner="assistant"):
         store.add_step({"caller": toolset.caller, "tool": "task_report", "detail": f"{title[:120]}：{report[:300]}",
                         "ok": True, "task_id": task_id})
     store.append_talk(partner, [{"role": "assistant", "at": utcnow_iso(), "task_id": task_id, "tools": tools[-15:],
-                                 "text": f"Worked on the task “{title}” ({'done' if done else 'still open'}).\n\n{report}"}])
+                                 "text": f"處理了任務「{title}」（{'已完成' if done else '未完成'}）。\n\n{report}"}])
     return {"report": report, "tools": tools, "done": done}
 
 

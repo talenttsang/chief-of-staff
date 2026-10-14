@@ -16,6 +16,7 @@ Routes
   POST /work/<id>        work one task in the background (the app calling itself for start_task, X-Run-Token)
   POST /watchdog         restart tasks whose work was cut off (Cloud Scheduler every 5 minutes, X-Run-Token)
   GET  /api/steps        the AI's work log, step by step (the Progress tab)
+  GET  /api/images/<id>  a photo sent in the chat (POST /api/talk/<partner> takes up to 4 with a message)
 
 Sign-in is one shared password, kept in Secret Manager (chat-assistant-password); there is no Google
 sign-in. A browser stays signed in for SESSION_DAYS after its last visit, until the password changes.
@@ -596,17 +597,63 @@ def api_talk_history(partner):
 def api_talk(partner):
     if partner not in PARTNERS:
         return jsonify(error="找不到此 AI 夥伴。"), 404
-    message = str((request.get_json(force=True) or {}).get("message", "")).strip()
-    if not message:
+    body = request.get_json(force=True) or {}
+    message = str(body.get("message", "")).strip()
+    images, problem = photos(body.get("images"))
+    if problem:
+        return jsonify(error=problem), 400
+    if not message and not images:
         return jsonify(error="請先說點甚麼。"), 400
     try:
-        reply = talk_service().ask(partner, message)
+        reply = talk_service().ask(partner, message, images=images)
     except Exception as exc:  # noqa: BLE001 - shown in the conversation
         import traceback
 
         print(f"talk[{partner}] failed: {exc!r}\n{traceback.format_exc()}")
         return jsonify(error=str(exc)[:500]), 502
     return jsonify(reply=reply)
+
+
+PHOTO_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+MAX_PHOTOS = 4
+MAX_PHOTO_BYTES = 700_000  # the page shrinks photos well below this; a Firestore document holds 1 MB
+
+
+def photos(raw):
+    """Photos sent with a message: [{mime, data (base64)}], checked. Returns (photos, problem)."""
+    import base64
+    import binascii
+
+    if not raw:
+        return [], ""
+    if not isinstance(raw, list) or len(raw) > MAX_PHOTOS:
+        return [], f"每則訊息最多 {MAX_PHOTOS} 張相片。"
+    out = []
+    for item in raw:
+        mime, data = str((item or {}).get("mime", "")), str((item or {}).get("data", ""))
+        if mime not in PHOTO_TYPES:
+            return [], "只可以傳送相片（JPEG、PNG、WebP、GIF）。"
+        try:
+            size = len(base64.b64decode(data, validate=True))
+        except (binascii.Error, ValueError):
+            return [], "相片無法讀取。"
+        if not size or size > MAX_PHOTO_BYTES:
+            return [], "相片太大，請選一張較小的。"
+        out.append({"mime": mime, "data": data})
+    return out, ""
+
+
+@app.get("/api/images/<image_id>")
+def api_image(image_id):
+    """A photo sent in the chat, for the thread to show."""
+    import base64
+
+    image = store.get_image(image_id) if re.fullmatch(r"[0-9a-f]{20}", image_id) else None
+    if not image:
+        return jsonify(error="找不到此相片。"), 404
+    resp = app.response_class(base64.b64decode(image["data"]), mimetype=image["mime"])
+    resp.headers["Cache-Control"] = "private, max-age=86400"
+    return resp
 
 
 @app.delete("/api/talk/<partner>")
@@ -806,6 +853,7 @@ def do_run(trigger):
             summary["errors"].append({"space": "(connections)", "error": str(exc)[:300]})
         try:
             store.prune_steps((datetime.now(timezone.utc) - timedelta(days=7)).isoformat())
+            store.prune_images((datetime.now(timezone.utc) - timedelta(days=30)).isoformat())
         except Exception as exc:  # noqa: BLE001 - an old log is no reason to fail the run
             print(f"steps not pruned: {exc!r}")
         summary["finished_at"] = utcnow_iso()

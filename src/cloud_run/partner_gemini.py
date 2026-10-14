@@ -50,7 +50,9 @@ def declarations(specs):
 def respond(system, history, toolset, secrets=None, model=None):
     url = (f"https://{VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/{GCP_PROJECT}/locations/{VERTEX_LOCATION}"
            f"/publishers/google/models/{model or TALK_MODEL}:generateContent")
-    contents = [{"role": "model" if t["role"] == "assistant" else "user", "parts": [{"text": t["text"]}]}
+    contents = [{"role": "model" if t["role"] == "assistant" else "user",
+                 "parts": [{"text": t["text"]}] + [{"inlineData": {"mimeType": i["mime"], "data": i["data"]}}
+                                                   for i in t.get("images") or []]}
                 for t in history if t.get("text")]
     body = {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents,
             "generationConfig": {"temperature": 0.4}}
