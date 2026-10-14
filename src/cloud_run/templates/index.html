@@ -151,16 +151,24 @@
     .msg .spk { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px;
       padding: 2px 6px; margin-left: 6px; border-radius: 6px; vertical-align: middle; }
     .msg .spk:hover, .msg .spk.on { background: var(--accent-weak); color: var(--accent); }
-    .composer { display: flex; gap: 8px; align-items: flex-end; }
-    .composer .photo { padding: 10px 11px; }
-    .attached { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-    .attached .thumb { position: relative; }
-    .attached img, .msg .photos img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; }
-    .attached .thumb button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: var(--bad, #b42318); color: #fff; cursor: pointer; line-height: 22px; padding: 0; }
+    /* The composer: one box, photo cards on top, the message below, the buttons along the bottom. */
+    .composer { display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+    .composer:focus-within { border-color: var(--accent); }
+    .composer textarea { width: 100%; min-height: 44px; max-height: 180px; padding: 4px 6px; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; resize: none; }
+    .composer-bar { display: flex; align-items: center; gap: 6px; }
+    .composer-bar .grow { flex: 1; }
+    .cbtn { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+    .cbtn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+    .cbtn:disabled { opacity: .5; cursor: default; }
+    .attached { display: flex; gap: 10px; flex-wrap: wrap; padding: 2px 2px 0; }
+    .attached .thumb { position: relative; width: 112px; height: 112px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--panel-2); }
+    .attached .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .attached .thumb button { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; font-size: 15px; line-height: 24px; padding: 0; opacity: 0; transition: opacity .15s; }
+    .attached .thumb:hover button, .attached .thumb button:focus { opacity: 1; }
+    @media (hover: none) { .attached .thumb button { opacity: 1; } }
     .msg .photos { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-    .msg .photos img { width: 120px; height: 120px; cursor: zoom-in; }
-    .chatwin.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
-    .composer textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 180px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); resize: none; }
+    .msg .photos img { width: 140px; height: 140px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); display: block; cursor: zoom-in; }
+    .chatwin.dropping .composer { border: 2px dashed var(--accent); }
     .suggestions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: auto 0; }
     .suggestions button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); }
     .suggestions button:hover { color: var(--text); border-color: var(--accent); }
@@ -171,7 +179,6 @@
     .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
     .pulse { width: 12px; height: 12px; border-radius: 50%; background: var(--bad); animation: pulse 1.4s ease-in-out infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-    .btn.mic { font-size: 15px; }
     /* Dialogs */
     dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; background: var(--panel); color: var(--text); width: min(600px, calc(100vw - 32px)); box-shadow: 0 10px 40px rgba(0,0,0,.25); }
     dialog::backdrop { background: rgba(0,0,0,.35); }
@@ -318,13 +325,16 @@
       <button class="btn" id="vmute">靜音</button>
       <button class="btn danger" id="vend">結束通話</button>
     </div>
-    <div class="attached" id="attached" hidden></div>
     <div class="composer" id="composer">
-      <button class="btn photo" id="addPhoto" title="加入相片（亦可貼上或拖放）" aria-label="加入相片">📷</button>
-      <input type="file" id="photoInput" accept="image/*" multiple hidden>
+      <div class="attached" id="attached" hidden></div>
       <textarea id="message" placeholder="傳訊息給 Talent Solutions AI…" aria-label="訊息" title="按 Enter 傳送，Shift+Enter 換行"></textarea>
-      <button class="btn mic" id="startVoice" title="即時通話">🎙 通話</button>
-      <button class="btn primary" id="send">傳送</button>
+      <div class="composer-bar">
+        <button class="cbtn" id="addPhoto" title="加入相片（亦可貼上或拖放）" aria-label="加入相片">📷 相片</button>
+        <input type="file" id="photoInput" accept="image/*" multiple hidden>
+        <span class="grow"></span>
+        <button class="cbtn mic" id="startVoice" title="即時通話">🎙 通話</button>
+        <button class="btn primary" id="send">傳送</button>
+      </div>
     </div>
   </div>
 </aside>
