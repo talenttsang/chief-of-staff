@@ -244,7 +244,10 @@ Guards in the service itself, whatever the model asks:
 - no typing into password or payment-card fields; no downloads, file pickers or device permissions; dialogs
   are dismissed (and reported).
 
-Sites that challenge data-centre visitors stay blocked; it doesn't disguise itself or solve challenges. It may
+On the live HelperXpress site the AI only looks: it never submits or creates anything there (sign-ups, job posts,
+applications, offers, messages), test account or not, because real helpers and employers see it. Flows that create
+or send things are tested only on a staging copy of HelperXpress (`STAGING_URL`, not set up yet). Sites that
+challenge data-centre visitors stay blocked; it doesn't disguise itself or solve challenges. It may
 type and fill in forms, also working alone on a task, so it can test HelperXpress's flows end to end with its
 test accounts and made-up data. The models are told to log in only with `sign_in`, never to enter real people's
 details, card or bank details or pay (HelperXpress's Stripe is live: it stops at the payment step), and on other

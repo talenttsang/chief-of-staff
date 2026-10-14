@@ -97,6 +97,13 @@ class BrowserToolTests(unittest.TestCase):
         self.assertEqual(sessions, ["tab-helper", "tab-employer"])  # each task keeps its own tab
         self.assertEqual(sorted(v["task_id"] for v in store.list_browser_views()), ["t-employer", "t-helper"])
 
+    def test_the_live_site_is_look_only_and_tests_wait_for_staging(self):
+        text = next(d for n, d, _ in tools.SPECS if n == "browser")
+        self.assertIn("never submit or create anything", text)
+        self.assertIn("isn't set up yet", text)  # no STAGING_URL: flows that create things aren't tested at all
+        import worker
+        self.assertIn("never submit or create anything there", worker.PROMPT)
+
     def test_a_live_call_gets_a_description_instead(self):
         import partner_gemini
 
